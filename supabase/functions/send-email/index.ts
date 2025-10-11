@@ -170,16 +170,20 @@ Deno.serve(async (req: Request) => {
       .insert({
         user_id: user.id,
         name: campaignName,
+        type: 'one-off',
         subject,
         content,
         status,
+        recipients_count: recipients.length,
+        sent_count: 0,
         scheduled_at: scheduledAt || null,
       })
       .select()
       .single();
 
     if (campaignError || !campaign) {
-      throw new Error('Failed to create campaign');
+      console.error('Campaign creation error:', campaignError);
+      throw new Error(`Failed to create campaign: ${campaignError?.message || 'Unknown error'}`);
     }
 
     const recipientRecords = recipients.map(r => ({
@@ -258,6 +262,7 @@ Deno.serve(async (req: Request) => {
         .from('email_campaigns')
         .update({
           status: finalStatus,
+          sent_count: successCount,
           sent_at: new Date().toISOString(),
         })
         .eq('id', campaign.id);
