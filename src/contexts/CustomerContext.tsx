@@ -81,9 +81,13 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addCustomer = useCallback(async (customer: Omit<Customer, 'id'>) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
+
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          user_id: user.id,
           first_name: customer.firstName,
           last_name: customer.lastName,
           email: customer.email,
@@ -177,7 +181,11 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const importCustomers = useCallback(async (newCustomers: Omit<Customer, 'id'>[]) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
+
       const contactsToInsert = newCustomers.map(customer => ({
+        user_id: user.id,
         first_name: customer.firstName,
         last_name: customer.lastName,
         email: customer.email,
