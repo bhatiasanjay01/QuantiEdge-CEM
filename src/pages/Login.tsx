@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChefHat, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,39 +8,19 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
-  const { user, login, signup, isLoading: authLoading } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      navigate('/');
-    }
-  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      if (isSignup) {
-        await signup(email, password);
-        toast.success('Account created successfully!');
-        navigate('/');
-      } else {
-        await login(email, password);
-        toast.success('Welcome back!');
-        navigate('/');
-      }
-    } catch (error: any) {
-      console.error('Auth error:', error);
-      let errorMessage = error?.message || (isSignup ? 'Failed to create account' : 'Invalid credentials');
-
-      if (!isSignup && errorMessage.includes('Invalid login credentials')) {
-        errorMessage = 'Invalid email or password. Need an account? Click "Sign up" below.';
-      }
-
-      toast.error(errorMessage);
+      await login(email, password);
+      toast.success('Welcome back!');
+      navigate('/');
+    } catch (error) {
+      toast.error('Invalid credentials');
     } finally {
       setIsLoading(false);
     }
@@ -57,18 +37,11 @@ const Login: React.FC = () => {
             </div>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            {isSignup ? 'Create your account' : 'Sign in to your account'}
+            Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Manage your CRM and email campaigns with ease
+            Manage your cooking class business with ease
           </p>
-          {!isSignup && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-sm text-blue-800 text-center">
-                <strong>First time here?</strong> Click "Sign up" below to create an account
-              </p>
-            </div>
-          )}
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -124,18 +97,14 @@ const Login: React.FC = () => {
               disabled={isLoading}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
-              {isLoading ? (isSignup ? 'Creating account...' : 'Signing in...') : (isSignup ? 'Sign up' : 'Sign in')}
+              {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
 
           <div className="text-center">
-            <button
-              type="button"
-              onClick={() => setIsSignup(!isSignup)}
-              className="text-sm text-orange-600 hover:text-orange-700 font-medium"
-            >
-              {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-            </button>
+            <p className="text-sm text-gray-600">
+              Demo credentials: any email and password
+            </p>
           </div>
         </form>
       </div>
