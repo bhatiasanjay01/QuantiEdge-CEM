@@ -72,7 +72,7 @@ const CSVUploadModal: React.FC<CSVUploadModalProps> = ({ onClose }) => {
     setStep('preview');
   };
 
-  const processImport = () => {
+  const processImport = async () => {
     const processedCustomers: Omit<Customer, 'id'>[] = csvData.map((row, index) => {
       const customer: any = {
         firstName: row[headers.indexOf(mapping.firstName)] || '',
@@ -90,9 +90,12 @@ const CSVUploadModal: React.FC<CSVUploadModalProps> = ({ onClose }) => {
       return customer;
     }).filter(customer => customer.firstName && customer.lastName && customer.email);
 
-    importCustomers(processedCustomers);
-    toast.success(`Successfully imported ${processedCustomers.length} customers`);
-    onClose();
+    try {
+      await importCustomers(processedCustomers);
+      onClose();
+    } catch (error) {
+      console.error('Error importing customers:', error);
+    }
   };
 
   const renderUploadStep = () => (

@@ -36,24 +36,25 @@ const CustomerModal: React.FC<CustomerModalProps> = ({ customer, onClose }) => {
     }
   }, [customer]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const customerData = {
       ...formData,
       dateAdded: customer?.dateAdded || new Date().toISOString().split('T')[0],
       lastActivity: new Date().toISOString().split('T')[0]
     };
 
-    if (customer) {
-      updateCustomer(customer.id, customerData);
-      toast.success('Customer updated successfully');
-    } else {
-      addCustomer(customerData);
-      toast.success('Customer added successfully');
+    try {
+      if (customer) {
+        await updateCustomer(customer.id, customerData);
+      } else {
+        await addCustomer(customerData);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Error saving customer:', error);
     }
-    
-    onClose();
   };
 
   const handleTagsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
