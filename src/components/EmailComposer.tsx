@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Send, Clock, Users, Eye, Mail, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Send, Clock, Users, Eye, Mail, AlertCircle } from 'lucide-react';
 import { useCustomers } from '../contexts/CustomerContext';
 import toast from 'react-hot-toast';
+import { sendEmail, getConnectedEmailAccount, type EmailAccount } from '../lib/emailApi';
 
 interface EmailComposerProps {
   onBack: () => void;
@@ -16,8 +17,26 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [emailAccount, setEmailAccount] = useState<EmailAccount | null>(null);
+  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
 
   const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
+
+  useEffect(() => {
+    loadEmailAccount();
+  }, []);
+
+  const loadEmailAccount = async () => {
+    try {
+      const account = await getConnectedEmailAccount();
+      setEmailAccount(account);
+    } catch (error) {
+      console.error('Failed to load email account:', error);
+    } finally {
+      setIsLoadingAccount(false);
+    }
+  };
 
   const handleCustomerToggle = (customerId: string) => {
     setSelectedCustomers(prev =>
@@ -35,7 +54,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
       toast.error('Please fill in all required fields and select recipients');
       return;
@@ -46,146 +65,46 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       return;
     }
 
-    const action = isScheduled ? 'scheduled' : 'sent';
-    toast.success(`Email ${action} successfully to ${selectedCustomers.length} recipients`);
-    onBack();
-  };
-
-  const openEmailClient = () => {
-    if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
-      toast.error('Please fill in all required fields and select recipients');
+    if (!emailAccount) {
+      toast.error('Please connect your Gmail account in Settings first');
       return;
     }
 
-    const selectedEmails = selectedCustomerData.map(c => c.email).join(',');
-    const mailtoLink = `mailto:${selectedEmails}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(content)}`;
-    window.location.href = mailtoLink;
-    toast.success('Opening email client...');
-  };
+    setIsSending(true);
 
-  const openEmailInNewWindow = () => {
-    if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
-      toast.error('Please fill in all required fields and select recipients');
-      return;
-    }
+    try {
+      const recipients = selectedCustomerData.map(c => ({
+        email: c.email,
+        name: `${c.firstName} ${c.lastName}`,
+      }));
 
-    const recipientsList = selectedCustomerData.map(c =>
-      `${c.firstName} ${c.lastName} &lt;${c.email}&gt;`
-    ).join('<br>');
+      const scheduledAt = isScheduled && scheduledDate && scheduledTime
+        ? `${scheduledDate}T${scheduledTime}:00`
+        : undefined;
 
-    const scheduleInfo = isScheduled && scheduledDate && scheduledTime
-      ? `<div style="background-color: #fef3c7; color: #92400e; padding: 12px; border-radius: 6px; margin-bottom: 20px;">📅 Scheduled for: ${scheduledDate} at ${scheduledTime}</div>`
-      : '';
+      const result = await sendEmail({
+        campaignName: subject,
+        subject,
+        content,
+        recipients,
+        scheduledAt,
+      });
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Email Draft - ${subject}</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #f9fafb;
-            padding: 20px;
-            line-height: 1.6;
+      if (result.success) {
+        if (scheduledAt) {
+          toast.success(`Email scheduled for ${scheduledDate} at ${scheduledTime}`);
+        } else {
+          toast.success(`Successfully sent ${result.successCount || 0} emails!`);
+          if (result.failedCount && result.failedCount > 0) {
+            toast.error(`${result.failedCount} emails failed to send`);
           }
-          .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow: hidden;
-          }
-          .header {
-            background-color: #ea580c;
-            color: white;
-            padding: 20px;
-          }
-          .content { padding: 30px; }
-          .field { margin-bottom: 20px; }
-          .field-label {
-            font-weight: 600;
-            color: #374151;
-            margin-bottom: 8px;
-          }
-          .field-value {
-            background-color: #f9fafb;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-          }
-          .message { white-space: pre-wrap; }
-          .actions {
-            padding: 20px 30px;
-            background-color: #f9fafb;
-            border-top: 1px solid #e5e7eb;
-          }
-          .btn {
-            padding: 10px 20px;
-            margin-right: 10px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-          }
-          .btn-primary {
-            background-color: #ea580c;
-            color: white;
-          }
-          .btn-secondary {
-            background-color: white;
-            color: #374151;
-            border: 1px solid #d1d5db;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Email Draft</h1>
-          </div>
-          <div class="content">
-            ${scheduleInfo}
-            <div class="field">
-              <div class="field-label">Recipients (${selectedCustomerData.length})</div>
-              <div class="field-value">${recipientsList}</div>
-            </div>
-            <div class="field">
-              <div class="field-label">Subject</div>
-              <div class="field-value">${subject}</div>
-            </div>
-            <div class="field">
-              <div class="field-label">Message</div>
-              <div class="field-value message">${content}</div>
-            </div>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" onclick="openMail()">Open in Email Client</button>
-            <button class="btn btn-secondary" onclick="window.print()">Print</button>
-            <button class="btn btn-secondary" onclick="window.close()">Close</button>
-          </div>
-        </div>
-        <script>
-          function openMail() {
-            const emails = '${selectedCustomerData.map(c => c.email).join(',')}';
-            const subject = '${subject.replace(/'/g, "\\'")}';
-            const body = '${content.replace(/'/g, "\\'").replace(/\n/g, '\\n')}';
-            window.location.href = 'mailto:' + emails + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-          }
-        </script>
-      </body>
-      </html>
-    `;
-
-    const newWindow = window.open('', '_blank', 'width=800,height=600');
-    if (newWindow) {
-      newWindow.document.write(htmlContent);
-      newWindow.document.close();
-      toast.success('Email draft opened in new window');
-    } else {
-      toast.error('Please allow popups to open email draft');
+        }
+        onBack();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send email');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -195,6 +114,14 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       .replace(/{{lastName}}/g, customer.lastName)
       .replace(/{{email}}/g, customer.email);
   };
+
+  if (isLoadingAccount) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -209,7 +136,9 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Compose Email</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Create and send personalized emails to your customers
+              {emailAccount
+                ? `Sending from ${emailAccount.email}`
+                : 'Connect your Gmail account to send emails'}
             </p>
           </div>
         </div>
@@ -222,28 +151,44 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
             {showPreview ? 'Hide Preview' : 'Preview'}
           </button>
           <button
-            onClick={openEmailInNewWindow}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open Draft
-          </button>
-          <button
-            onClick={openEmailClient}
-            className="inline-flex items-center px-4 py-2 border border-blue-600 rounded-md shadow-sm text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors duration-200"
-          >
-            <Mail className="h-4 w-4 mr-2" />
-            Email Client
-          </button>
-          <button
             onClick={handleSend}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors duration-200"
+            disabled={isSending || !emailAccount}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
           >
-            {isScheduled ? <Clock className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            {isScheduled ? 'Schedule' : 'Send Now'}
+            {isSending ? (
+              <>
+                <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                {isScheduled ? <Clock className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                {isScheduled ? 'Schedule' : 'Send via Gmail'}
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {!emailAccount && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-orange-600 mr-3 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-orange-800">Gmail Account Required</h3>
+              <p className="mt-1 text-sm text-orange-700">
+                You need to connect your Gmail account before you can send emails. Go to Settings to connect your account.
+              </p>
+              <button
+                onClick={() => window.location.href = '/settings'}
+                className="mt-3 text-sm font-medium text-orange-600 hover:text-orange-700"
+              >
+                Go to Settings →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -381,6 +326,13 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
                   <div className="text-sm text-gray-500 mb-2">Preview for:</div>
                   <div className="text-sm font-medium text-gray-900">
                     {selectedCustomerData[0].firstName} {selectedCustomerData[0].lastName}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-medium text-gray-700 mb-2">From:</div>
+                  <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
+                    {emailAccount?.email || 'Connect Gmail account'}
                   </div>
                 </div>
 

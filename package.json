@@ -21,7 +21,8 @@
     "react-dropzone": "^14.2.3",
     "papaparse": "^5.4.1",
     "react-hot-toast": "^2.4.1",
-    "clsx": "^2.0.0"
+    "clsx": "^2.0.0",
+    "@supabase/supabase-js": "^2.39.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
