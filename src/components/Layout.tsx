@@ -12,22 +12,33 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   React.useEffect(() => {
-    if (!user) {
+    if (!isLoading && !user) {
       navigate('/login');
     }
-  }, [user, navigate]);
+  }, [user, navigate, isLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return null;
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'Email Campaigns', href: '/email-campaigns', icon: Mail },
+    { name: 'Email Campaigns', href: '/campaigns', icon: Mail },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
