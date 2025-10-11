@@ -79,11 +79,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password,
       options: {
         emailRedirectTo: window.location.origin,
+        data: {
+          businessName: 'My Business',
+          businessUrl: 'my-business',
+        }
       },
     });
 
-    console.log('Signup result:', { user: data.user?.email, error });
-    if (error) throw error;
+    console.log('Signup result:', { user: data.user?.email, session: data.session, error });
+    if (error) {
+      console.error('Signup error details:', error);
+      throw error;
+    }
 
     if (data.user) {
       const userData = {

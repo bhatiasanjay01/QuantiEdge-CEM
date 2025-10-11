@@ -33,7 +33,13 @@ const Login: React.FC = () => {
         navigate('/');
       }
     } catch (error: any) {
-      const errorMessage = error?.message || (isSignup ? 'Failed to create account' : 'Invalid credentials');
+      console.error('Auth error:', error);
+      let errorMessage = error?.message || (isSignup ? 'Failed to create account' : 'Invalid credentials');
+
+      if (!isSignup && errorMessage.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Need an account? Click "Sign up" below.';
+      }
+
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -56,6 +62,13 @@ const Login: React.FC = () => {
           <p className="mt-2 text-center text-sm text-gray-600">
             Manage your CRM and email campaigns with ease
           </p>
+          {!isSignup && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800 text-center">
+                <strong>First time here?</strong> Click "Sign up" below to create an account
+              </p>
+            </div>
+          )}
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
