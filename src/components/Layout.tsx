@@ -27,7 +27,7 @@ const Layout: React.FC = () => {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'Email Campaigns', href: '/email-campaigns', icon: Mail },
+    { name: 'Email Campaigns', href: '/campaigns', icon: Mail },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];

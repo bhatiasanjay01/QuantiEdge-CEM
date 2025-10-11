@@ -12,6 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithMicrosoft: () => Promise<void>;
   logout: () => void;
@@ -95,6 +96,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signup = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+
+    if (error) throw error;
+
+    if (data.user) {
+      setUser({
+        id: data.user.id,
+        email: data.user.email || '',
+        businessName: data.user.user_metadata?.businessName,
+        businessUrl: data.user.user_metadata?.businessUrl,
+      });
+    }
+  };
+
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -159,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, loginWithMicrosoft, logout, isLoading, hasOAuthCredentials }}>
+    <AuthContext.Provider value={{ user, login, signup, loginWithGoogle, loginWithMicrosoft, logout, isLoading, hasOAuthCredentials }}>
       {children}
     </AuthContext.Provider>
   );

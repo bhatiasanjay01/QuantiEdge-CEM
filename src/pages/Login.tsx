@@ -9,7 +9,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
-  const { login, loginWithGoogle, loginWithMicrosoft } = useAuth();
+  const { login, signup, loginWithGoogle, loginWithMicrosoft } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,11 +17,18 @@ const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      toast.success('Welcome back!');
-      navigate('/');
-    } catch (error) {
-      toast.error('Invalid credentials');
+      if (isSignup) {
+        await signup(email, password);
+        toast.success('Account created successfully!');
+        navigate('/');
+      } else {
+        await login(email, password);
+        toast.success('Welcome back!');
+        navigate('/');
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || (isSignup ? 'Failed to create account' : 'Invalid credentials');
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
