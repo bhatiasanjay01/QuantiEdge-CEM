@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
-import { Save, Mail, Globe, Shield, Bell, User, Building } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, Mail, Globe, Shield, Bell, User, Building, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { initiateGmailOAuth, disconnectGmail, getConnectedEmailAccount, completeGmailOAuth, type EmailAccount } from '../lib/emailApi';
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('business');
-  
+  const [activeTab, setActiveTab] = useState('email');
+  const [emailAccount, setEmailAccount] = useState<EmailAccount | null>(null);
+  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
+
   const [businessSettings, setBusinessSettings] = useState({
     businessName: user?.businessName || '',
     businessUrl: user?.businessUrl || '',
@@ -15,16 +19,6 @@ const Settings: React.FC = () => {
     address: '',
     timezone: 'America/New_York',
     currency: 'USD'
-  });
-
-  const [emailSettings, setEmailSettings] = useState({
-    smtpHost: '',
-    smtpPort: '587',
-    smtpUsername: '',
-    smtpPassword: '',
-    fromName: businessSettings.businessName,
-    fromEmail: businessSettings.email,
-    replyTo: businessSettings.email
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -36,16 +30,172 @@ const Settings: React.FC = () => {
   });
 
   const tabs = [
-    { id: 'business', name: 'Business Info', icon: Building },
     { id: 'email', name: 'Email Setup', icon: Mail },
+    { id: 'business', name: 'Business Info', icon: Building },
     { id: 'notifications', name: 'Notifications', icon: Bell },
     { id: 'security', name: 'Security', icon: Shield }
   ];
 
+  useEffect(() => {
+    loadEmailAccount();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+
+    if (code) {
+      handleOAuthCallback(code);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  const loadEmailAccount = async () => {
+    try {
+      const account = await getConnectedEmailAccount();
+      setEmailAccount(account);
+    } catch (error) {
+      console.error('Failed to load email account:', error);
+    } finally {
+      setIsLoadingAccount(false);
+    }
+  };
+
+  const handleOAuthCallback = async (code: string) => {
+    try {
+      const redirectUri = `${window.location.origin}/settings`;
+      const result = await completeGmailOAuth(code, redirectUri);
+      toast.success(`Gmail account ${result.email} connected successfully!`);
+      await loadEmailAccount();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to connect Gmail account');
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setIsConnecting(true);
+    try {
+      const redirectUri = `${window.location.origin}/settings`;
+      const authUrl = await initiateGmailOAuth(redirectUri);
+      window.location.href = authUrl;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to initiate Gmail connection');
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    try {
+      await disconnectGmail();
+      setEmailAccount(null);
+      toast.success('Gmail account disconnected successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to disconnect Gmail account');
+    }
+  };
+
   const handleSave = (section: string) => {
-    // Mock save logic
     toast.success(`${section} settings saved successfully`);
   };
+
+  const renderEmailSettings = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Gmail Integration</h3>
+        <p className="text-sm text-gray-600 mb-6">
+          Connect your Gmail account to send emails directly from the CRM using Gmail's API.
+        </p>
+
+        {isLoadingAccount ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
+          </div>
+        ) : emailAccount ? (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start">
+                <CheckCircle className="h-6 w-6 text-green-600 mr-3 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-semibold text-green-900">Connected</h4>
+                  <p className="text-sm text-green-800 mt-1">
+                    Your Gmail account is connected and ready to send emails.
+                  </p>
+                  <div className="mt-3 bg-white border border-green-200 rounded-md p-3">
+                    <div className="flex items-center">
+                      <Mail className="h-5 w-5 text-green-600 mr-2" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{emailAccount.email}</div>
+                        <div className="text-xs text-gray-500">
+                          Connected on {new Date(emailAccount.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleDisconnectGmail}
+                className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 transition-colors duration-200"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Disconnect Gmail
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <Mail className="h-6 w-6 text-blue-600 mr-3 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-900">Connect Your Gmail Account</h4>
+                <p className="text-sm text-blue-800 mt-1">
+                  To send emails from the CRM, you need to connect your Gmail account using OAuth 2.0.
+                </p>
+                <div className="mt-4 bg-white border border-blue-200 rounded-md p-4">
+                  <h5 className="text-sm font-medium text-gray-900 mb-2">What happens when you connect:</h5>
+                  <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
+                    <li>Secure OAuth 2.0 authentication with Google</li>
+                    <li>Send emails directly through your Gmail account</li>
+                    <li>Personalized email campaigns to your customers</li>
+                    <li>Track sent emails and delivery status</li>
+                  </ul>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={handleConnectGmail}
+                    disabled={isConnecting}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    {isConnecting ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-4 w-4 mr-2" />
+                        Connect Gmail Account
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h5 className="text-sm font-medium text-gray-900 mb-2">Important Notes:</h5>
+          <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+            <li>You'll be redirected to Google to authorize access</li>
+            <li>We only request permissions to send emails on your behalf</li>
+            <li>Your credentials are securely stored and encrypted</li>
+            <li>You can disconnect your account at any time</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderBusinessSettings = () => (
     <div className="space-y-6">
@@ -63,7 +213,7 @@ const Settings: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Business URL
@@ -163,118 +313,6 @@ const Settings: React.FC = () => {
     </div>
   );
 
-  const renderEmailSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Email Configuration</h3>
-        <div className="bg-blue-50 p-4 rounded-md mb-6">
-          <div className="flex">
-            <Mail className="h-5 w-5 text-blue-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">Gmail SMTP Setup</h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <p>To use Gmail for sending emails:</p>
-                <ol className="list-decimal list-inside mt-1 space-y-1">
-                  <li>Enable 2-factor authentication on your Gmail account</li>
-                  <li>Generate an App Password for this application</li>
-                  <li>Use your Gmail address and the App Password below</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              SMTP Host
-            </label>
-            <input
-              type="text"
-              value={emailSettings.smtpHost}
-              onChange={(e) => setEmailSettings({ ...emailSettings, smtpHost: e.target.value })}
-              placeholder="smtp.gmail.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              SMTP Port
-            </label>
-            <input
-              type="text"
-              value={emailSettings.smtpPort}
-              onChange={(e) => setEmailSettings({ ...emailSettings, smtpPort: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username (Email)
-            </label>
-            <input
-              type="email"
-              value={emailSettings.smtpUsername}
-              onChange={(e) => setEmailSettings({ ...emailSettings, smtpUsername: e.target.value })}
-              placeholder="your-email@gmail.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password (App Password)
-            </label>
-            <input
-              type="password"
-              value={emailSettings.smtpPassword}
-              onChange={(e) => setEmailSettings({ ...emailSettings, smtpPassword: e.target.value })}
-              placeholder="App Password from Gmail"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              From Name
-            </label>
-            <input
-              type="text"
-              value={emailSettings.fromName}
-              onChange={(e) => setEmailSettings({ ...emailSettings, fromName: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              From Email
-            
-            </label>
-            <input
-              type="email"
-              value={emailSettings.fromEmail}
-              onChange={(e) => setEmailSettings({ ...emailSettings, fromEmail: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={() => handleSave('Email')}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors duration-200"
-        >
-          <Save className="h-4 w-4 mr-2" />
-          Save Email Settings
-        </button>
-      </div>
-    </div>
-  );
-
   const renderNotificationSettings = () => (
     <div className="space-y-6">
       <div>
@@ -298,9 +336,9 @@ const Settings: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={value}
-                  onChange={(e) => setNotificationSettings({ 
-                    ...notificationSettings, 
-                    [key]: e.target.checked 
+                  onChange={(e) => setNotificationSettings({
+                    ...notificationSettings,
+                    [key]: e.target.checked
                   })}
                   className="sr-only peer"
                 />
@@ -408,7 +446,6 @@ const Settings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -417,7 +454,6 @@ const Settings: React.FC = () => {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Sidebar */}
         <div className="lg:w-64">
           <nav className="space-y-1">
             {tabs.map((tab) => (
@@ -441,7 +477,6 @@ const Settings: React.FC = () => {
           </nav>
         </div>
 
-        {/* Content */}
         <div className="flex-1">
           <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
             {activeTab === 'business' && renderBusinessSettings()}
