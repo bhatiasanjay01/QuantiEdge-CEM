@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Send, Clock, Users, Paperclip, Eye } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Users, Paperclip, Eye, Mail, ExternalLink } from 'lucide-react';
 import { useCustomers } from '../contexts/CustomerContext';
 import toast from 'react-hot-toast';
 
@@ -50,6 +50,220 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     onBack();
   };
 
+  const openEmailClient = () => {
+    if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
+      toast.error('Please fill in all required fields and select recipients');
+      return;
+    }
+
+    const selectedEmails = selectedCustomerData.map(c => c.email).join(',');
+    const mailtoLink = `mailto:${selectedEmails}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(content)}`;
+
+    window.open(mailtoLink, '_blank');
+    toast.success('Opening email client...');
+  };
+
+  const openEmailInNewWindow = () => {
+    if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
+      toast.error('Please fill in all required fields and select recipients');
+      return;
+    }
+
+    const emailData = {
+      subject,
+      content,
+      recipients: selectedCustomerData.map(c => ({
+        name: `${c.firstName} ${c.lastName}`,
+        email: c.email
+      })),
+      scheduledDate: isScheduled ? scheduledDate : null,
+      scheduledTime: isScheduled ? scheduledTime : null
+    };
+
+    const newWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+
+    if (newWindow) {
+      newWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Email Draft - ${subject}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+              background-color: #f9fafb;
+              padding: 20px;
+              line-height: 1.6;
+            }
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+              background-color: white;
+              border-radius: 8px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              overflow: hidden;
+            }
+            .header {
+              background-color: #ea580c;
+              color: white;
+              padding: 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .header h1 { font-size: 24px; font-weight: 600; }
+            .content { padding: 30px; }
+            .field { margin-bottom: 20px; }
+            .field-label {
+              font-weight: 600;
+              color: #374151;
+              margin-bottom: 8px;
+              font-size: 14px;
+            }
+            .field-value {
+              background-color: #f9fafb;
+              padding: 12px;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
+              font-size: 14px;
+              color: #1f2937;
+            }
+            .recipients-list {
+              max-height: 200px;
+              overflow-y: auto;
+            }
+            .recipient-item {
+              padding: 8px;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            .recipient-item:last-child { border-bottom: none; }
+            .message-content {
+              white-space: pre-wrap;
+              min-height: 150px;
+            }
+            .actions {
+              display: flex;
+              gap: 12px;
+              padding: 20px 30px;
+              background-color: #f9fafb;
+              border-top: 1px solid #e5e7eb;
+            }
+            .btn {
+              padding: 10px 20px;
+              border-radius: 6px;
+              border: none;
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              transition: all 0.2s;
+            }
+            .btn-primary {
+              background-color: #ea580c;
+              color: white;
+            }
+            .btn-primary:hover { background-color: #dc2626; }
+            .btn-secondary {
+              background-color: white;
+              color: #374151;
+              border: 1px solid #d1d5db;
+            }
+            .btn-secondary:hover { background-color: #f9fafb; }
+            .schedule-info {
+              background-color: #fef3c7;
+              color: #92400e;
+              padding: 12px;
+              border-radius: 6px;
+              font-size: 14px;
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Email Draft</h1>
+              <span style="font-size: 14px;">QuantiEdge CRM</span>
+            </div>
+
+            <div class="content">
+              ${emailData.scheduledDate && emailData.scheduledTime ? `
+                <div class="schedule-info">
+                  📅 Scheduled for: ${emailData.scheduledDate} at ${emailData.scheduledTime}
+                </div>
+              ` : ''}
+
+              <div class="field">
+                <div class="field-label">Recipients (${emailData.recipients.length})</div>
+                <div class="field-value recipients-list">
+                  ${emailData.recipients.map(r => `
+                    <div class="recipient-item">
+                      <strong>${r.name}</strong> &lt;${r.email}&gt;
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field-label">Subject</div>
+                <div class="field-value">${emailData.subject}</div>
+              </div>
+
+              <div class="field">
+                <div class="field-label">Message</div>
+                <div class="field-value message-content">${emailData.content}</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn btn-primary" onclick="openMailClient()">
+                ✉️ Open in Email Client
+              </button>
+              <button class="btn btn-secondary" onclick="copyToClipboard()">
+                📋 Copy Content
+              </button>
+              <button class="btn btn-secondary" onclick="window.print()">
+                🖨️ Print
+              </button>
+              <button class="btn btn-secondary" onclick="window.close()">
+                ✕ Close
+              </button>
+            </div>
+          </div>
+
+          <script>
+            const emailData = ${JSON.stringify(emailData)};
+
+            function openMailClient() {
+              const emails = emailData.recipients.map(r => r.email).join(',');
+              const mailtoLink = \`mailto:\${emails}?subject=\${encodeURIComponent(emailData.subject)}&body=\${encodeURIComponent(emailData.content)}\`;
+              window.location.href = mailtoLink;
+            }
+
+            function copyToClipboard() {
+              const text = \`To: \${emailData.recipients.map(r => r.email).join(', ')}\n\nSubject: \${emailData.subject}\n\n\${emailData.content}\`;
+              navigator.clipboard.writeText(text).then(() => {
+                alert('Email content copied to clipboard!');
+              }).catch(err => {
+                console.error('Failed to copy:', err);
+              });
+            }
+          </script>
+        </body>
+        </html>
+      `);
+      newWindow.document.close();
+      toast.success('Email draft opened in new window');
+    } else {
+      toast.error('Please allow popups to open email draft');
+    }
+  };
+
   const personalizeContent = (content: string, customer: any) => {
     return content
       .replace(/{{firstName}}/g, customer.firstName)
@@ -84,6 +298,20 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
           >
             <Eye className="h-4 w-4 mr-2" />
             {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
+          <button
+            onClick={openEmailInNewWindow}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open Draft
+          </button>
+          <button
+            onClick={openEmailClient}
+            className="inline-flex items-center px-4 py-2 border border-blue-600 rounded-md shadow-sm text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors duration-200"
+          >
+            <Mail className="h-4 w-4 mr-2" />
+            Email Client
           </button>
           <button
             onClick={handleSend}
