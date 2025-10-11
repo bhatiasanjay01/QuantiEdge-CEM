@@ -7,25 +7,33 @@ from flask_cors import CORS
 
 def load_env():
     """
-    Loads environment variables from a .env file in the same directory.
+    Loads environment variables from .env file in the same directory.
     """
-    print("--- Attempting to load .env file ---")
+    print("--- Loading environment variables from .env file ---")
     try:
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        with open(os.path.join(dir_path, '.env.email')) as f:
-            print("Successfully opened .env.email file.")
-            for i, line in enumerate(f):
+        env_file = os.path.join(dir_path, '.env')
+
+        if not os.path.exists(env_file):
+            print(f"❌ .env file not found at: {env_file}")
+            print("Trying .env.email as fallback...")
+            env_file = os.path.join(dir_path, '.env.email')
+
+        with open(env_file) as f:
+            print(f"✅ Successfully opened {os.path.basename(env_file)}")
+            for line in f:
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
                     key = key.strip()
                     value = value.strip().strip('"\'')
                     os.environ[key] = value
-                    print(f"Loaded variable: '{key}'")
+                    print(f"✅ Loaded: {key}")
     except FileNotFoundError:
-        print("CRITICAL: .env.email file not found. Please ensure it exists in the same folder as server.py.")
+        print("❌ CRITICAL: No .env or .env.email file found!")
+        print("Please create .env file with SENDER_EMAIL and SENDER_PASSWORD")
     except Exception as e:
-        print(f"An error occurred while reading .env.email file: {e}")
+        print(f"❌ Error loading .env file: {e}")
 
 load_env()
 
@@ -36,11 +44,11 @@ SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
 if not SENDER_EMAIL or not SENDER_PASSWORD:
-    print("\nFATAL ERROR: SENDER_EMAIL or SENDER_PASSWORD could not be loaded from environment.")
-    print("Please ensure a .env.email file exists with these values and the server is restarted.\n")
+    print("\n❌ FATAL ERROR: SENDER_EMAIL or SENDER_PASSWORD not found!")
+    print("Please ensure .env file exists with these values.\n")
 else:
-    print("\nSUCCESS: Credentials loaded successfully! Ready to send emails.")
-    print(f"Using sender email: {SENDER_EMAIL}\n")
+    print("\n✅ SUCCESS: Email credentials loaded successfully!")
+    print(f"📧 Sender: {SENDER_EMAIL}\n")
 
 @app.route('/api/send-email', methods=['POST'])
 def send_email():
@@ -145,9 +153,9 @@ def health_check():
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("  EMAIL CAMPAIGN SERVER")
+    print("  📧 EMAIL CAMPAIGN SERVER")
     print("="*60)
-    print(f"  Running on: http://127.0.0.1:5000")
-    print(f"  Sender Email: {SENDER_EMAIL if SENDER_EMAIL else 'NOT CONFIGURED'}")
+    print(f"  🌐 Server: http://0.0.0.0:5000 (accessible from network)")
+    print(f"  📧 Sender: {SENDER_EMAIL if SENDER_EMAIL else 'NOT CONFIGURED'}")
     print("="*60 + "\n")
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
