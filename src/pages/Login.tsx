@@ -43,18 +43,18 @@ const Login: React.FC = () => {
   const handleGoogleLogin = async () => {
     try {
       await loginWithGoogle();
-      toast.success('Redirecting to Google...');
-    } catch (error) {
-      toast.error('Failed to sign in with Google');
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      toast.error(error?.message || 'OAuth not configured. Please use email/password signup.');
     }
   };
 
   const handleMicrosoftLogin = async () => {
     try {
       await loginWithMicrosoft();
-      toast.success('Redirecting to Microsoft...');
-    } catch (error) {
-      toast.error('Failed to sign in with Microsoft');
+    } catch (error: any) {
+      console.error('Microsoft login error:', error);
+      toast.error(error?.message || 'OAuth not configured. Please use email/password signup.');
     }
   };
 
