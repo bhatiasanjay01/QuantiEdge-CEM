@@ -448,9 +448,13 @@ const ContactListManager: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
+
       const { data: listData, error: listError } = await supabase
         .from('contact_lists')
         .insert({
+          user_id: user.id,
           name: newListName,
           description: newListDescription || null,
           contact_count: previewContacts.length,
@@ -462,6 +466,7 @@ const ContactListManager: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       const contactsWithListId = previewContacts.map(contact => ({
         ...contact,
+        user_id: user.id,
         list_id: listData.id,
       }));
 
