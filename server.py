@@ -1,161 +1,248 @@
 import smtplib
 import os
+import json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timedelta, timezone
 
-def load_env():
-    """
-    Loads environment variables from .env file in the same directory.
-    """
-    print("--- Loading environment variables from .env file ---")
-    try:
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        env_file = os.path.join(dir_path, '.env')
-
-        if not os.path.exists(env_file):
-            print(f"❌ .env file not found at: {env_file}")
-            print("Trying .env.email as fallback...")
-            env_file = os.path.join(dir_path, '.env.email')
-
-        with open(env_file) as f:
-            print(f"✅ Successfully opened {os.path.basename(env_file)}")
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip().strip('"\'')
-                    os.environ[key] = value
-                    print(f"✅ Loaded: {key}")
-    except FileNotFoundError:
-        print("❌ CRITICAL: No .env or .env.email file found!")
-        print("Please create .env file with SENDER_EMAIL and SENDER_PASSWORD")
-    except Exception as e:
-        print(f"❌ Error loading .env file: {e}")
-
-load_env()
-
+# --- Setup Flask ---
 app = Flask(__name__)
 CORS(app)
 
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+# Load environment variables for email credentials
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL")
+SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD")
 
 if not SENDER_EMAIL or not SENDER_PASSWORD:
-    print("\n❌ FATAL ERROR: SENDER_EMAIL or SENDER_PASSWORD not found!")
-    print("Please ensure .env file exists with these values.\n")
-else:
-    print("\n✅ SUCCESS: Email credentials loaded successfully!")
-    print(f"📧 Sender: {SENDER_EMAIL}\n")
+    print("WARNING: SENDER_EMAIL and SENDER_PASSWORD environment variables must be set.")
+    print("Emails will not be sent.")
 
-@app.route('/api/send-email', methods=['POST'])
-def send_email():
+DATA_FILE = "emails.json"
+
+scheduler = BackgroundScheduler()
+scheduler.start()
+
+# --- Load saved emails ---
+def load_emails():
+    """Loads email data from a JSON file."""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                print("WARNING: Could not decode emails.json. Starting with empty list.")
+                return []
+    return []
+
+# --- Save emails ---
+def save_emails(data):
+    """Saves email data to a JSON file."""
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+emails = load_emails()
+
+# --- Send email helper ---
+def send_email_now(to, subject, body):
     """
-    API endpoint to send email to single or multiple recipients.
-    Expects: { "to": ["email1@example.com", "email2@example.com"], "subject": "...", "body": "..." }
+    Sends a single email or sends the same email to a list of recipients.
+    'to' can be a string (single email) or a list of strings (multiple emails).
     """
     if not SENDER_EMAIL or not SENDER_PASSWORD:
-        return jsonify({"error": "Server is not configured with sender credentials."}), 500
+        print("❌ Cannot send email: SENDER_EMAIL or SENDER_PASSWORD is not set.")
+        return False
 
-    data = request.get_json()
-    recipients = data.get('to', [])
-    subject = data.get('subject')
-    body = data.get('body')
-
-    if not isinstance(recipients, list):
-        recipients = [recipients]
-
-    if not all([recipients, subject, body]):
-        return jsonify({"error": "Missing required fields: 'to', 'subject', and 'body' are required."}), 400
+    recipients = [to] if isinstance(to, str) else to
 
     success_count = 0
-    failed_recipients = []
 
-    for recipient_email in recipients:
+    for recipient in recipients:
         try:
             msg = MIMEMultipart()
-            msg['From'] = SENDER_EMAIL
-            msg['To'] = recipient_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'html'))
+            msg["From"] = SENDER_EMAIL
+            msg["To"] = recipient
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "html"))
 
-            print(f"🔌 Connecting to Gmail SMTP server for recipient: {recipient_email}...")
-            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server = smtplib.SMTP("smtp.gmail.com", 587)
             server.starttls()
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            print("✅ Logged in successfully!")
-
-            print(f"📤 Sending email to {recipient_email}...")
             server.send_message(msg)
-            print(f"✅ Email successfully sent to {recipient_email}")
             server.quit()
-
+            print(f"✅ Sent: '{subject}' to {recipient}")
             success_count += 1
-
-        except smtplib.SMTPAuthenticationError:
-            print("❌ SMTP Authentication Error: Gmail rejected the login.")
-            print("   - Double-check if SENDER_EMAIL and SENDER_PASSWORD in your .env.email file are correct.")
-            print("   - IMPORTANT: If using 2-Factor Authentication, you MUST generate and use an 'App Password'.")
-            failed_recipients.append(recipient_email)
-
         except Exception as e:
-            print(f"❌ An unexpected error occurred sending to {recipient_email}: {e}")
-            failed_recipients.append(recipient_email)
+            print(f"❌ Failed to send email to {recipient}: {e}")
 
-    if success_count > 0:
-        message = f"Successfully sent {success_count} email(s)"
-        if failed_recipients:
-            message += f". Failed to send to: {', '.join(failed_recipients)}"
-        return jsonify({"message": message, "success_count": success_count, "failed_count": len(failed_recipients)}), 200
-    else:
-        return jsonify({"error": f"Failed to send any emails. Failed recipients: {', '.join(failed_recipients)}"}), 500
+    return success_count > 0
 
-@app.route('/api/schedule-email', methods=['POST'])
-def schedule_email():
-    """
-    API endpoint to schedule an email for later delivery.
-    For now, this just logs the scheduled email - you would need a job scheduler like Celery in production.
-    """
+# --- API Endpoints ---
+
+def update_email_status(email_entry, new_status):
+    """Helper to update the status of an email entry in the global list."""
+    recipient_tuple = tuple(email_entry['to']) if isinstance(email_entry['to'], list) else email_entry['to']
+
+    for email in emails:
+        current_recipient = tuple(email['to']) if isinstance(email['to'], list) else email['to']
+
+        if current_recipient == recipient_tuple and email["send_at"] == email_entry["send_at"]:
+            email["status"] = new_status
+            return True
+    return False
+
+
+@app.route("/api/send-email", methods=["POST"])
+def send_email():
+    """Immediately sends a one-off email and saves it to the database."""
     data = request.get_json()
-    recipients = data.get('to', [])
-    subject = data.get('subject')
-    body = data.get('body')
-    send_at = data.get('send_at')
+    to = data.get("to")
+    subject = data.get("subject")
+    body = data.get("body")
 
-    if not isinstance(recipients, list):
-        recipients = [recipients]
+    if not all([to, subject, body]):
+        return jsonify({"error": "Missing data. Requires 'to', 'subject', and 'body'."}), 400
 
-    if not all([recipients, subject, body, send_at]):
-        return jsonify({"error": "Missing required fields: 'to', 'subject', 'body', and 'send_at' are required."}), 400
+    if send_email_now(to, subject, body):
+        emails.append({
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "status": "sent",
+            "send_at": datetime.now(timezone.utc).isoformat()
+        })
+        save_emails(emails)
+        recipient_count = len(to) if isinstance(to, list) else 1
+        return jsonify({
+            "message": f"Email sent to {recipient_count} recipient(s)!",
+            "success_count": recipient_count,
+            "failed_count": 0
+        }), 200
+    return jsonify({"error": "Failed to send email."}), 500
 
-    print(f"📅 Email scheduled for {send_at} to {len(recipients)} recipient(s)")
-    print(f"   Subject: {subject}")
-    print(f"   Recipients: {', '.join(recipients)}")
+@app.route("/api/schedule-email", methods=["POST"])
+def schedule_email():
+    """Schedules a one-off email to be sent at a specific time."""
+    data = request.get_json()
+    to = data.get("to")
+    subject = data.get("subject")
+    body = data.get("body")
+    send_at_str = data.get("send_at")
 
-    # In production, you would store this in a queue/scheduler
-    # For now, we just acknowledge it
+    if not all([to, subject, body, send_at_str]):
+        return jsonify({"error": "Missing data. Requires 'to', 'subject', 'body', and 'send_at'."}), 400
+
+    try:
+        run_time = datetime.fromisoformat(send_at_str)
+        if run_time.tzinfo is None:
+            run_time = run_time.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid date format."}), 400
+
+    email_entry = {
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "status": "scheduled",
+        "send_at": run_time.isoformat()
+    }
+    emails.append(email_entry)
+    save_emails(emails)
+
+    def job(email_entry):
+        if send_email_now(email_entry["to"], email_entry["subject"], email_entry["body"]):
+            update_email_status(email_entry, "sent")
+            save_emails(emails)
+
+    scheduler.add_job(job, "date", run_date=run_time, args=[email_entry])
+
+    recipient_count = len(to) if isinstance(to, list) else 1
     return jsonify({
-        "message": f"Email scheduled successfully for {len(recipients)} recipient(s)",
-        "scheduled_at": send_at,
-        "recipient_count": len(recipients)
+        "message": f"Email scheduled for {recipient_count} recipient(s)!",
+        "scheduled_at": run_time.isoformat(),
+        "recipient_count": recipient_count
     }), 200
 
-@app.route('/api/health', methods=['GET'])
+@app.route("/api/schedule-sequence", methods=["POST"])
+def schedule_sequence():
+    """
+    Schedules a multi-step email sequence.
+    'to' can be a list of emails. The sequence is scheduled for EVERY recipient.
+    """
+    data = request.get_json()
+    to = data.get("to")
+    steps = data.get("steps", [])
+
+    if not to or not steps:
+        return jsonify({"error": "Missing data. Requires 'to' (list of emails) and 'steps'."}), 400
+
+    if not isinstance(to, list) or not to:
+        return jsonify({"error": "'to' must be a non-empty list of emails for sequences."}), 400
+
+    if not isinstance(steps, list):
+        return jsonify({"error": "Steps must be a list."}), 400
+
+    for recipient_email in to:
+        for i, step in enumerate(steps):
+            subject = step.get("subject", "")
+            body = step.get("body", "")
+            send_at_str = step.get("scheduledAt")
+
+            if not send_at_str:
+                return jsonify({"error": f"Missing scheduledAt for step {i+1}."}), 400
+
+            try:
+                run_time = datetime.fromisoformat(send_at_str)
+                if run_time.tzinfo is None:
+                    run_time = run_time.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                return jsonify({"error": f"Invalid date format for step {i+1}."}), 400
+
+            email_entry = {
+                "to": recipient_email,
+                "subject": subject,
+                "body": body,
+                "status": "scheduled",
+                "send_at": run_time.isoformat()
+            }
+            emails.append(email_entry)
+            save_emails(emails)
+
+            def job(email_entry):
+                if send_email_now(email_entry["to"], email_entry["subject"], email_entry["body"]):
+                    for email in emails:
+                        if email["send_at"] == email_entry["send_at"] and email["to"] == email_entry["to"]:
+                            email["status"] = "sent"
+                            break
+                    save_emails(emails)
+
+            scheduler.add_job(job, "date", run_date=run_time, args=[email_entry])
+
+    return jsonify({"message": f"Sequence scheduled for {len(to)} recipient(s)! Total steps: {len(to) * len(steps)}"}), 200
+
+@app.route("/api/emails", methods=["GET"])
+def get_emails():
+    """Returns all saved emails and their status."""
+    return jsonify(emails)
+
+@app.route("/api/health", methods=["GET"])
 def health_check():
-    """Simple health check endpoint"""
+    """Health check endpoint"""
     return jsonify({
         "status": "healthy",
         "sender_configured": bool(SENDER_EMAIL and SENDER_PASSWORD),
         "sender_email": SENDER_EMAIL if SENDER_EMAIL else "Not configured"
     }), 200
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("\n" + "="*60)
-    print("  📧 EMAIL CAMPAIGN SERVER")
+    print("  📧 EMAIL CAMPAIGN SERVER WITH SCHEDULER")
     print("="*60)
-    print(f"  🌐 Server: http://0.0.0.0:5000 (accessible from network)")
+    print(f"  🌐 Server: http://0.0.0.0:5000")
     print(f"  📧 Sender: {SENDER_EMAIL if SENDER_EMAIL else 'NOT CONFIGURED'}")
+    print(f"  📅 Scheduler: Active")
     print("="*60 + "\n")
+
     app.run(host='0.0.0.0', port=5000, debug=True)

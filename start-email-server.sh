@@ -1,28 +1,42 @@
 #!/bin/bash
 
 echo "============================================================"
-echo "  STARTING EMAIL CAMPAIGN SERVER"
+echo "  📧 STARTING EMAIL CAMPAIGN SERVER"
 echo "============================================================"
 echo ""
 
-# Check if Flask is installed
+# Check if required Python modules are installed
+echo "Checking dependencies..."
 if ! python3 -c "import flask" 2>/dev/null; then
-    echo "❌ Flask is not installed!"
-    echo "Installing Flask and Flask-CORS..."
-    apt-get install -y python3-flask python3-flask-cors
+    echo "❌ Flask not installed! Installing..."
+    apt-get install -y python3-flask python3-flask-cors python3-apscheduler
 fi
 
-# Check if .env.email exists
-if [ ! -f ".env.email" ]; then
-    echo "❌ Error: .env.email file not found!"
-    echo "Please create .env.email with your Gmail credentials."
+if ! python3 -c "import apscheduler" 2>/dev/null; then
+    echo "❌ APScheduler not installed! Installing..."
+    apt-get install -y python3-apscheduler
+fi
+
+# Load environment variables from .env file
+if [ -f ".env" ]; then
+    echo "✅ Loading credentials from .env file..."
+    export $(grep -v '^#' .env | grep -v '^$' | xargs)
+else
+    echo "❌ Error: .env file not found!"
     exit 1
 fi
 
-echo "✅ All dependencies installed"
-echo "✅ Email credentials found"
+# Check if credentials are set
+if [ -z "$SENDER_EMAIL" ] || [ -z "$SENDER_PASSWORD" ]; then
+    echo "❌ Error: SENDER_EMAIL or SENDER_PASSWORD not found in .env"
+    exit 1
+fi
+
+echo "✅ All dependencies ready"
+echo "✅ Credentials loaded"
+echo "📧 Sender: $SENDER_EMAIL"
 echo ""
-echo "Starting server on http://127.0.0.1:5000..."
+echo "🚀 Starting Python server on port 5000..."
 echo ""
 
 # Start the server
