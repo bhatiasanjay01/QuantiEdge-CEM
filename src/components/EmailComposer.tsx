@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Send, Clock, Users, Eye, Mail, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Users, Eye, Mail, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCustomers } from '../contexts/CustomerContext';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { sendEmail, getConnectedEmailAccount, type EmailAccount } from '../lib/emailApi';
 
@@ -8,9 +9,30 @@ interface EmailComposerProps {
   onBack: () => void;
 }
 
+interface ContactList {
+  id: string;
+  name: string;
+  description?: string;
+  contact_count: number;
+}
+
+interface Contact {
+  id: string;
+  list_id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  job_title?: string;
+}
+
 const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const { customers } = useCustomers();
-  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [contactLists, setContactLists] = useState<ContactList[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [expandedLists, setExpandedLists] = useState<Set<string>>(new Set());
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
@@ -20,11 +42,13 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const [isSending, setIsSending] = useState(false);
   const [emailAccount, setEmailAccount] = useState<EmailAccount | null>(null);
   const [isLoadingAccount, setIsLoadingAccount] = useState(true);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(true);
 
-  const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
+  const selectedContactData = contacts.filter(c => selectedContacts.includes(c.id));
 
   useEffect(() => {
     loadEmailAccount();
+    loadContactsAndLists();
   }, []);
 
   const loadEmailAccount = async () => {
@@ -38,24 +62,76 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     }
   };
 
-  const handleCustomerToggle = (customerId: string) => {
-    setSelectedCustomers(prev =>
-      prev.includes(customerId)
-        ? prev.filter(id => id !== customerId)
-        : [...prev, customerId]
+  const loadContactsAndLists = async () => {
+    try {
+      setIsLoadingContacts(true);
+
+      const { data: listsData, error: listsError } = await supabase
+        .from('contact_lists')
+        .select('*')
+        .order('name');
+
+      if (listsError) throw listsError;
+
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select('*')
+        .order('first_name');
+
+      if (contactsError) throw contactsError;
+
+      setContactLists(listsData || []);
+      setContacts(contactsData || []);
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+      toast.error('Failed to load contacts');
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const toggleList = (listId: string) => {
+    setExpandedLists(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(listId)) {
+        newSet.delete(listId);
+      } else {
+        newSet.add(listId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleContactToggle = (contactId: string) => {
+    setSelectedContacts(prev =>
+      prev.includes(contactId)
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
     );
   };
 
-  const handleSelectAll = () => {
-    if (selectedCustomers.length === customers.length) {
-      setSelectedCustomers([]);
+  const handleSelectAllInList = (listId: string | null) => {
+    const listContacts = contacts.filter(c => c.list_id === listId);
+    const listContactIds = listContacts.map(c => c.id);
+    const allSelected = listContactIds.every(id => selectedContacts.includes(id));
+
+    if (allSelected) {
+      setSelectedContacts(prev => prev.filter(id => !listContactIds.includes(id)));
     } else {
-      setSelectedCustomers(customers.map(c => c.id));
+      setSelectedContacts(prev => [...new Set([...prev, ...listContactIds])]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedContacts.length === contacts.length) {
+      setSelectedContacts([]);
+    } else {
+      setSelectedContacts(contacts.map(c => c.id));
     }
   };
 
   const handleSend = async () => {
-    if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
+    if (!subject.trim() || !content.trim() || selectedContacts.length === 0) {
       toast.error('Please fill in all required fields and select recipients');
       return;
     }
@@ -73,9 +149,9 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     setIsSending(true);
 
     try {
-      const recipients = selectedCustomerData.map(c => ({
+      const recipients = selectedContactData.map(c => ({
         email: c.email,
-        name: `${c.firstName} ${c.lastName}`,
+        name: `${c.first_name} ${c.last_name}`,
       }));
 
       const scheduledAt = isScheduled && scheduledDate && scheduledTime
@@ -108,11 +184,11 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     }
   };
 
-  const personalizeContent = (content: string, customer: any) => {
+  const personalizeContent = (content: string, contact: Contact) => {
     return content
-      .replace(/{{firstName}}/g, customer.firstName)
-      .replace(/{{lastName}}/g, customer.lastName)
-      .replace(/{{email}}/g, customer.email);
+      .replace(/{{firstName}}/g, contact.first_name)
+      .replace(/{{lastName}}/g, contact.last_name)
+      .replace(/{{email}}/g, contact.email);
   };
 
   if (isLoadingAccount) {
@@ -197,38 +273,159 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
               <h3 className="text-lg font-medium text-gray-900">Recipients</h3>
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-500">
-                  {selectedCustomers.length} of {customers.length} selected
+                  {selectedContacts.length} of {contacts.length} selected
                 </span>
                 <button
                   onClick={handleSelectAll}
                   className="text-sm text-orange-600 hover:text-orange-700 font-medium"
                 >
-                  {selectedCustomers.length === customers.length ? 'Deselect All' : 'Select All'}
+                  {selectedContacts.length === contacts.length ? 'Deselect All' : 'Select All'}
                 </button>
               </div>
             </div>
 
-            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md">
-              {customers.map(customer => (
-                <label
-                  key={customer.id}
-                  className="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedCustomers.includes(customer.id)}
-                    onChange={() => handleCustomerToggle(customer.id)}
-                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                  />
-                  <div className="ml-3">
-                    <div className="text-sm font-medium text-gray-900">
-                      {customer.firstName} {customer.lastName}
+            {isLoadingContacts ? (
+              <div className="flex items-center justify-center py-8 text-gray-500">
+                Loading contacts...
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-md">
+                {contactLists.map(list => {
+                  const listContacts = contacts.filter(c => c.list_id === list.id);
+                  const isExpanded = expandedLists.has(list.id);
+                  const listContactIds = listContacts.map(c => c.id);
+                  const allSelected = listContactIds.length > 0 && listContactIds.every(id => selectedContacts.includes(id));
+
+                  return (
+                    <div key={list.id} className="border-b border-gray-100 last:border-b-0">
+                      <div className="flex items-center p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer">
+                        <button
+                          onClick={() => toggleList(list.id)}
+                          className="flex items-center flex-1 text-left"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
+                          )}
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold text-gray-900">{list.name}</div>
+                            {list.description && (
+                              <div className="text-xs text-gray-500">{list.description}</div>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {listContacts.length} contact{listContacts.length !== 1 ? 's' : ''}
+                          </span>
+                        </button>
+                        {listContacts.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectAllInList(list.id);
+                            }}
+                            className="ml-2 text-xs text-orange-600 hover:text-orange-700 font-medium"
+                          >
+                            {allSelected ? 'Deselect All' : 'Select All'}
+                          </button>
+                        )}
+                      </div>
+
+                      {isExpanded && listContacts.length > 0 && (
+                        <div className="bg-white">
+                          {listContacts.map(contact => (
+                            <label
+                              key={contact.id}
+                              className="flex items-center p-3 pl-10 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedContacts.includes(contact.id)}
+                                onChange={() => handleContactToggle(contact.id)}
+                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                              />
+                              <div className="ml-3 flex-1">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {contact.first_name} {contact.last_name}
+                                </div>
+                                <div className="text-sm text-gray-500">{contact.email}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm text-gray-500">{customer.email}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
+                  );
+                })}
+
+                {/* Uncategorized contacts (no list assigned) */}
+                {(() => {
+                  const uncategorized = contacts.filter(c => !c.list_id);
+                  if (uncategorized.length === 0) return null;
+
+                  const isExpanded = expandedLists.has('uncategorized');
+                  const uncategorizedIds = uncategorized.map(c => c.id);
+                  const allSelected = uncategorizedIds.every(id => selectedContacts.includes(id));
+
+                  return (
+                    <div className="border-b border-gray-100 last:border-b-0">
+                      <div className="flex items-center p-3 bg-gray-50 hover:bg-gray-100 cursor-pointer">
+                        <button
+                          onClick={() => toggleList('uncategorized')}
+                          className="flex items-center flex-1 text-left"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-gray-500 mr-2" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-gray-500 mr-2" />
+                          )}
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold text-gray-700">Uncategorized</div>
+                            <div className="text-xs text-gray-500">Contacts without a list</div>
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {uncategorized.length} contact{uncategorized.length !== 1 ? 's' : ''}
+                          </span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectAllInList(null);
+                          }}
+                          className="ml-2 text-xs text-orange-600 hover:text-orange-700 font-medium"
+                        >
+                          {allSelected ? 'Deselect All' : 'Select All'}
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="bg-white">
+                          {uncategorized.map(contact => (
+                            <label
+                              key={contact.id}
+                              className="flex items-center p-3 pl-10 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedContacts.includes(contact.id)}
+                                onChange={() => handleContactToggle(contact.id)}
+                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                              />
+                              <div className="ml-3 flex-1">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {contact.first_name} {contact.last_name}
+                                </div>
+                                <div className="text-sm text-gray-500">{contact.email}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -320,12 +517,12 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-fit">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Email Preview</h3>
 
-            {selectedCustomerData.length > 0 ? (
+            {selectedContactData.length > 0 ? (
               <div className="space-y-4">
                 <div className="border-b border-gray-200 pb-4">
                   <div className="text-sm text-gray-500 mb-2">Preview for:</div>
                   <div className="text-sm font-medium text-gray-900">
-                    {selectedCustomerData[0].firstName} {selectedCustomerData[0].lastName}
+                    {selectedContactData[0].first_name} {selectedContactData[0].last_name}
                   </div>
                 </div>
 
@@ -339,14 +536,14 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
                 <div>
                   <div className="text-sm font-medium text-gray-700 mb-2">Subject:</div>
                   <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded">
-                    {personalizeContent(subject, selectedCustomerData[0]) || 'No subject'}
+                    {personalizeContent(subject, selectedContactData[0]) || 'No subject'}
                   </div>
                 </div>
 
                 <div>
                   <div className="text-sm font-medium text-gray-700 mb-2">Message:</div>
                   <div className="text-sm text-gray-900 bg-gray-50 p-3 rounded whitespace-pre-wrap">
-                    {personalizeContent(content, selectedCustomerData[0]) || 'No content'}
+                    {personalizeContent(content, selectedContactData[0]) || 'No content'}
                   </div>
                 </div>
               </div>
