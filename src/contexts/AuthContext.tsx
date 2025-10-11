@@ -74,15 +74,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.log('Auth error, using demo mode:', error.message);
-        const demoUser: User = {
-          id: 'demo-' + Date.now(),
-          email,
-          businessName: 'Culinary Delights Academy',
-          businessUrl: 'culinary-delights'
-        };
-        setUser(demoUser);
-        return;
+        if (error.message.includes('Invalid login credentials')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+          });
+
+          if (signUpError) throw signUpError;
+
+          if (signUpData.user) {
+            setUser({
+              id: signUpData.user.id,
+              email: signUpData.user.email || '',
+              businessName: 'Culinary Delights Academy',
+              businessUrl: 'culinary-delights'
+            });
+            return;
+          }
+        }
+        throw error;
       }
 
       if (data.user) {
@@ -93,14 +103,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           businessUrl: 'culinary-delights'
         });
       }
-    } catch (error) {
-      const demoUser: User = {
-        id: 'demo-' + Date.now(),
-        email,
-        businessName: 'Culinary Delights Academy',
-        businessUrl: 'culinary-delights'
-      };
-      setUser(demoUser);
+    } catch (error: any) {
+      console.error('Authentication error:', error.message);
+      throw error;
     }
   };
 

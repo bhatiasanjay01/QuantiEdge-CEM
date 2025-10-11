@@ -17,10 +17,10 @@ const Login: React.FC = () => {
 
     try {
       await login(email, password);
-      toast.success('Welcome back!');
+      toast.success('Welcome!');
       navigate('/');
-    } catch (error) {
-      toast.error('Invalid credentials');
+    } catch (error: any) {
+      toast.error(error.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +103,7 @@ const Login: React.FC = () => {
 
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Demo credentials: any email and password
+              New user? Just enter your email and password to create an account
             </p>
           </div>
         </form>
