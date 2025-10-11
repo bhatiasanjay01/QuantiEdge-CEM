@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, ArrowLeft, Send, Clock, XCircle, CheckCircle,
-  FileText, User, List, Upload, Mail, Edit, Trash2, Users
+  FileText, User, List, Upload, Mail, Edit, Trash2, Users, UserPlus
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCustomers } from '../contexts/CustomerContext';
+import AddRecipientModal from '../components/AddRecipientModal';
 import Papa from 'papaparse';
 import toast from 'react-hot-toast';
 
@@ -112,6 +113,7 @@ const EmailCampaigns: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'compose' | 'lists'>('campaigns');
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddRecipientModal, setShowAddRecipientModal] = useState(false);
 
   useEffect(() => {
     loadCampaigns();
@@ -187,6 +189,13 @@ const EmailCampaigns: React.FC = () => {
           </p>
         </div>
         <div className="flex space-x-3">
+          <button
+            onClick={() => setShowAddRecipientModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Recipient
+          </button>
           <button
             onClick={() => setActiveTab('lists')}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
@@ -373,6 +382,13 @@ const EmailCampaigns: React.FC = () => {
           onBack={() => setActiveTab('campaigns')}
         />
       )}
+      <AddRecipientModal
+        isOpen={showAddRecipientModal}
+        onClose={() => setShowAddRecipientModal(false)}
+        onRecipientAdded={() => {
+          loadCampaigns();
+        }}
+      />
     </div>
   );
 };
@@ -419,23 +435,95 @@ const EmailComposer: React.FC<{ onBack: () => void; onCampaignCreated: () => voi
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('email_campaigns').insert({
-        name: campaignName,
-        type: 'one-off',
-        status: isScheduled ? 'scheduled' : 'draft',
-        subject,
-        content,
-        recipients_count: selectedCustomers.length,
-        scheduled_at: isScheduled ? scheduledDateTime : null,
-      });
+      const recipientEmails = selectedCustomers
+        .map(id => customers.find(c => c.id === id)?.email)
+        .filter(Boolean) as string[];
 
-      if (error) throw error;
+      const campaignStatus = isScheduled ? 'scheduled' : 'sending';
 
-      toast.success(
-        isScheduled
-          ? 'Campaign scheduled successfully!'
-          : 'Campaign created successfully!'
-      );
+      const { data: campaignData, error: campaignError } = await supabase
+        .from('email_campaigns')
+        .insert({
+          name: campaignName,
+          type: 'one-off',
+          status: campaignStatus,
+          subject,
+          content,
+          recipients_count: selectedCustomers.length,
+          scheduled_at: isScheduled ? scheduledDateTime : null,
+        })
+        .select()
+        .single();
+
+      if (campaignError) throw campaignError;
+
+      if (!isScheduled) {
+        try {
+          const response = await fetch('http://localhost:5000/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: recipientEmails,
+              subject,
+              body: content,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            await supabase
+              .from('email_campaigns')
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                sent_count: result.success_count || recipientEmails.length
+              })
+              .eq('id', campaignData.id);
+
+            toast.success(`Email sent successfully to ${result.success_count || recipientEmails.length} recipient(s)!`);
+          } else {
+            await supabase
+              .from('email_campaigns')
+              .update({ status: 'failed' })
+              .eq('id', campaignData.id);
+
+            toast.error(result.error || 'Failed to send emails. Check if server is running.');
+          }
+        } catch (emailError) {
+          console.error('Email sending error:', emailError);
+          await supabase
+            .from('email_campaigns')
+            .update({ status: 'failed' })
+            .eq('id', campaignData.id);
+          toast.error('Failed to connect to email server. Make sure Python server is running on port 5000.');
+        }
+      } else {
+        try {
+          const response = await fetch('http://localhost:5000/api/schedule-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: recipientEmails,
+              subject,
+              body: content,
+              send_at: scheduledDateTime,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            toast.success('Campaign scheduled successfully!');
+          } else {
+            toast.error(result.error || 'Failed to schedule email');
+          }
+        } catch (scheduleError) {
+          console.error('Scheduling error:', scheduleError);
+          toast.error('Failed to connect to email server for scheduling.');
+        }
+      }
+
       onCampaignCreated();
       onBack();
     } catch (error) {
@@ -469,14 +557,14 @@ const EmailComposer: React.FC<{ onBack: () => void; onCampaignCreated: () => voi
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 transition-colors duration-200"
         >
           {loading ? (
-            'Saving...'
+            'Processing...'
           ) : isScheduled ? (
             <>
               <Clock className="h-4 w-4 mr-2" /> Schedule
             </>
           ) : (
             <>
-              <Send className="h-4 w-4 mr-2" /> Save Campaign
+              <Send className="h-4 w-4 mr-2" /> Send Now
             </>
           )}
         </button>
