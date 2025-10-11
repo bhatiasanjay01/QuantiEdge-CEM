@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { XCircle, User, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface AddRecipientModalProps {
@@ -10,6 +11,7 @@ interface AddRecipientModalProps {
 }
 
 const AddRecipientModal: React.FC<AddRecipientModalProps> = ({ isOpen, onClose, onRecipientAdded }) => {
+  const { user } = useAuth();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -35,10 +37,16 @@ const AddRecipientModal: React.FC<AddRecipientModalProps> = ({ isOpen, onClose, 
     try {
       let listId: string | null = null;
 
+      if (!user) {
+        toast.error('You must be logged in to add contacts');
+        return;
+      }
+
       const { data: lists, error: listsError } = await supabase
         .from('contact_lists')
         .select('id')
         .eq('name', 'Direct Additions')
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (listsError && listsError.code !== 'PGRST116') {
@@ -51,6 +59,7 @@ const AddRecipientModal: React.FC<AddRecipientModalProps> = ({ isOpen, onClose, 
         const { data: newList, error: createListError } = await supabase
           .from('contact_lists')
           .insert({
+            user_id: user.id,
             name: 'Direct Additions',
             description: 'Contacts added directly through the app',
             contact_count: 0,
@@ -63,6 +72,7 @@ const AddRecipientModal: React.FC<AddRecipientModalProps> = ({ isOpen, onClose, 
       }
 
       const { error: contactError } = await supabase.from('contacts').insert({
+        user_id: user.id,
         list_id: listId,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
