@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Send, Clock, Users, Paperclip, Eye, Mail, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Users, Eye, Mail, ExternalLink } from 'lucide-react';
 import { useCustomers } from '../contexts/CustomerContext';
 import toast from 'react-hot-toast';
 
@@ -17,9 +17,11 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const [scheduledTime, setScheduledTime] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
+  const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
+
   const handleCustomerToggle = (customerId: string) => {
-    setSelectedCustomers(prev => 
-      prev.includes(customerId) 
+    setSelectedCustomers(prev =>
+      prev.includes(customerId)
         ? prev.filter(id => id !== customerId)
         : [...prev, customerId]
     );
@@ -44,7 +46,6 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       return;
     }
 
-    // Mock send logic
     const action = isScheduled ? 'scheduled' : 'sent';
     toast.success(`Email ${action} successfully to ${selectedCustomers.length} recipients`);
     onBack();
@@ -58,8 +59,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
 
     const selectedEmails = selectedCustomerData.map(c => c.email).join(',');
     const mailtoLink = `mailto:${selectedEmails}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(content)}`;
-
-    window.open(mailtoLink, '_blank');
+    window.location.href = mailtoLink;
     toast.success('Opening email client...');
   };
 
@@ -69,194 +69,119 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       return;
     }
 
-    const emailData = {
-      subject,
-      content,
-      recipients: selectedCustomerData.map(c => ({
-        name: `${c.firstName} ${c.lastName}`,
-        email: c.email
-      })),
-      scheduledDate: isScheduled ? scheduledDate : null,
-      scheduledTime: isScheduled ? scheduledTime : null
-    };
+    const recipientsList = selectedCustomerData.map(c =>
+      `${c.firstName} ${c.lastName} &lt;${c.email}&gt;`
+    ).join('<br>');
 
-    const newWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    const scheduleInfo = isScheduled && scheduledDate && scheduledTime
+      ? `<div style="background-color: #fef3c7; color: #92400e; padding: 12px; border-radius: 6px; margin-bottom: 20px;">📅 Scheduled for: ${scheduledDate} at ${scheduledTime}</div>`
+      : '';
 
-    if (newWindow) {
-      newWindow.document.write(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Email Draft - ${subject}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-              background-color: #f9fafb;
-              padding: 20px;
-              line-height: 1.6;
-            }
-            .container {
-              max-width: 800px;
-              margin: 0 auto;
-              background-color: white;
-              border-radius: 8px;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-              overflow: hidden;
-            }
-            .header {
-              background-color: #ea580c;
-              color: white;
-              padding: 20px;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            }
-            .header h1 { font-size: 24px; font-weight: 600; }
-            .content { padding: 30px; }
-            .field { margin-bottom: 20px; }
-            .field-label {
-              font-weight: 600;
-              color: #374151;
-              margin-bottom: 8px;
-              font-size: 14px;
-            }
-            .field-value {
-              background-color: #f9fafb;
-              padding: 12px;
-              border-radius: 6px;
-              border: 1px solid #e5e7eb;
-              font-size: 14px;
-              color: #1f2937;
-            }
-            .recipients-list {
-              max-height: 200px;
-              overflow-y: auto;
-            }
-            .recipient-item {
-              padding: 8px;
-              border-bottom: 1px solid #e5e7eb;
-            }
-            .recipient-item:last-child { border-bottom: none; }
-            .message-content {
-              white-space: pre-wrap;
-              min-height: 150px;
-            }
-            .actions {
-              display: flex;
-              gap: 12px;
-              padding: 20px 30px;
-              background-color: #f9fafb;
-              border-top: 1px solid #e5e7eb;
-            }
-            .btn {
-              padding: 10px 20px;
-              border-radius: 6px;
-              border: none;
-              font-size: 14px;
-              font-weight: 500;
-              cursor: pointer;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              transition: all 0.2s;
-            }
-            .btn-primary {
-              background-color: #ea580c;
-              color: white;
-            }
-            .btn-primary:hover { background-color: #dc2626; }
-            .btn-secondary {
-              background-color: white;
-              color: #374151;
-              border: 1px solid #d1d5db;
-            }
-            .btn-secondary:hover { background-color: #f9fafb; }
-            .schedule-info {
-              background-color: #fef3c7;
-              color: #92400e;
-              padding: 12px;
-              border-radius: 6px;
-              font-size: 14px;
-              margin-bottom: 20px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Email Draft</h1>
-              <span style="font-size: 14px;">QuantiEdge CRM</span>
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Email Draft - ${subject}</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f9fafb;
+            padding: 20px;
+            line-height: 1.6;
+          }
+          .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+          }
+          .header {
+            background-color: #ea580c;
+            color: white;
+            padding: 20px;
+          }
+          .content { padding: 30px; }
+          .field { margin-bottom: 20px; }
+          .field-label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+          }
+          .field-value {
+            background-color: #f9fafb;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+          }
+          .message { white-space: pre-wrap; }
+          .actions {
+            padding: 20px 30px;
+            background-color: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+          }
+          .btn {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+          }
+          .btn-primary {
+            background-color: #ea580c;
+            color: white;
+          }
+          .btn-secondary {
+            background-color: white;
+            color: #374151;
+            border: 1px solid #d1d5db;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Email Draft</h1>
+          </div>
+          <div class="content">
+            ${scheduleInfo}
+            <div class="field">
+              <div class="field-label">Recipients (${selectedCustomerData.length})</div>
+              <div class="field-value">${recipientsList}</div>
             </div>
-
-            <div class="content">
-              ${emailData.scheduledDate && emailData.scheduledTime ? `
-                <div class="schedule-info">
-                  📅 Scheduled for: ${emailData.scheduledDate} at ${emailData.scheduledTime}
-                </div>
-              ` : ''}
-
-              <div class="field">
-                <div class="field-label">Recipients (${emailData.recipients.length})</div>
-                <div class="field-value recipients-list">
-                  ${emailData.recipients.map(r => `
-                    <div class="recipient-item">
-                      <strong>${r.name}</strong> &lt;${r.email}&gt;
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <div class="field">
-                <div class="field-label">Subject</div>
-                <div class="field-value">${emailData.subject}</div>
-              </div>
-
-              <div class="field">
-                <div class="field-label">Message</div>
-                <div class="field-value message-content">${emailData.content}</div>
-              </div>
+            <div class="field">
+              <div class="field-label">Subject</div>
+              <div class="field-value">${subject}</div>
             </div>
-
-            <div class="actions">
-              <button class="btn btn-primary" onclick="openMailClient()">
-                ✉️ Open in Email Client
-              </button>
-              <button class="btn btn-secondary" onclick="copyToClipboard()">
-                📋 Copy Content
-              </button>
-              <button class="btn btn-secondary" onclick="window.print()">
-                🖨️ Print
-              </button>
-              <button class="btn btn-secondary" onclick="window.close()">
-                ✕ Close
-              </button>
+            <div class="field">
+              <div class="field-label">Message</div>
+              <div class="field-value message">${content}</div>
             </div>
           </div>
+          <div class="actions">
+            <button class="btn btn-primary" onclick="openMail()">Open in Email Client</button>
+            <button class="btn btn-secondary" onclick="window.print()">Print</button>
+            <button class="btn btn-secondary" onclick="window.close()">Close</button>
+          </div>
+        </div>
+        <script>
+          function openMail() {
+            const emails = '${selectedCustomerData.map(c => c.email).join(',')}';
+            const subject = '${subject.replace(/'/g, "\\'")}';
+            const body = '${content.replace(/'/g, "\\'").replace(/\n/g, '\\n')}';
+            window.location.href = 'mailto:' + emails + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+          }
+        </script>
+      </body>
+      </html>
+    `;
 
-          <script>
-            const emailData = ${JSON.stringify(emailData)};
-
-            function openMailClient() {
-              const emails = emailData.recipients.map(r => r.email).join(',');
-              const mailtoLink = \`mailto:\${emails}?subject=\${encodeURIComponent(emailData.subject)}&body=\${encodeURIComponent(emailData.content)}\`;
-              window.location.href = mailtoLink;
-            }
-
-            function copyToClipboard() {
-              const text = \`To: \${emailData.recipients.map(r => r.email).join(', ')}\n\nSubject: \${emailData.subject}\n\n\${emailData.content}\`;
-              navigator.clipboard.writeText(text).then(() => {
-                alert('Email content copied to clipboard!');
-              }).catch(err => {
-                console.error('Failed to copy:', err);
-              });
-            }
-          </script>
-        </body>
-        </html>
-      `);
+    const newWindow = window.open('', '_blank', 'width=800,height=600');
+    if (newWindow) {
+      newWindow.document.write(htmlContent);
       newWindow.document.close();
       toast.success('Email draft opened in new window');
     } else {
@@ -271,11 +196,8 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       .replace(/{{email}}/g, customer.email);
   };
 
-  const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
-
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <button
@@ -324,9 +246,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Email Composer */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Recipients */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Recipients</h3>
@@ -342,7 +262,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
                 </button>
               </div>
             </div>
-            
+
             <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md">
               {customers.map(customer => (
                 <label
@@ -366,10 +286,9 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {/* Email Content */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Email Content</h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -400,15 +319,14 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
               <div className="bg-blue-50 p-4 rounded-md">
                 <h4 className="text-sm font-medium text-blue-800 mb-2">Personalization Tokens</h4>
                 <div className="text-sm text-blue-700 space-y-1">
-                  <div><code>{{firstName}}</code> - Customer's first name</div>
-                  <div><code>{{lastName}}</code> - Customer's last name</div>
-                  <div><code>{{email}}</code> - Customer's email address</div>
+                  <div><code className="bg-blue-100 px-1 rounded">{'{{firstName}}'}</code> - Customer's first name</div>
+                  <div><code className="bg-blue-100 px-1 rounded">{'{{lastName}}'}</code> - Customer's last name</div>
+                  <div><code className="bg-blue-100 px-1 rounded">{'{{email}}'}</code> - Customer's email address</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Scheduling */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">Delivery Options</h3>
@@ -453,22 +371,17 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
           </div>
         </div>
 
-        {/* Preview Panel */}
         {showPreview && (
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-fit">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Email Preview</h3>
-            
+
             {selectedCustomerData.length > 0 ? (
               <div className="space-y-4">
                 <div className="border-b border-gray-200 pb-4">
                   <div className="text-sm text-gray-500 mb-2">Preview for:</div>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                    {selectedCustomerData.map(customer => (
-                      <option key={customer.id}>
-                        {customer.firstName} {customer.lastName}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="text-sm font-medium text-gray-900">
+                    {selectedCustomerData[0].firstName} {selectedCustomerData[0].lastName}
+                  </div>
                 </div>
 
                 <div>
