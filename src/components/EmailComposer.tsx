@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Send, Clock, Users, Eye, Mail, ExternalLink } from 'lucide-react';
 import { useCustomers } from '../contexts/CustomerContext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 interface EmailComposerProps {
@@ -9,6 +11,7 @@ interface EmailComposerProps {
 
 const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const { customers } = useCustomers();
+  const { user } = useAuth();
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
@@ -16,6 +19,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const selectedCustomerData = customers.filter(c => selectedCustomers.includes(c.id));
 
@@ -35,7 +39,7 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!subject.trim() || !content.trim() || selectedCustomers.length === 0) {
       toast.error('Please fill in all required fields and select recipients');
       return;
@@ -46,9 +50,77 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
       return;
     }
 
-    const action = isScheduled ? 'scheduled' : 'sent';
-    toast.success(`Email ${action} successfully to ${selectedCustomers.length} recipients`);
-    onBack();
+    if (!user) {
+      toast.error('You must be logged in to send emails');
+      return;
+    }
+
+    setIsSending(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Session expired. Please log in again.');
+        return;
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const edgeFunctionUrl = `${supabaseUrl}/functions/v1/send-email-oauth`;
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const customerId of selectedCustomers) {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) continue;
+
+        const personalizedSubject = personalizeContent(subject, customer);
+        const personalizedBody = personalizeContent(content, customer);
+
+        try {
+          const response = await fetch(edgeFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: customer.email,
+              subject: personalizedSubject,
+              body: personalizedBody,
+              provider: 'google',
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            const error = await response.json();
+            console.error(`Failed to send to ${customer.email}:`, error);
+            failCount++;
+          }
+        } catch (error) {
+          console.error(`Error sending to ${customer.email}:`, error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully sent ${successCount} email(s)`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to send ${failCount} email(s). Check console for details.`);
+      }
+
+      if (successCount === selectedCustomers.length) {
+        onBack();
+      }
+    } catch (error) {
+      console.error('Send error:', error);
+      toast.error('Failed to send emails. Make sure you have connected your Google account.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const openEmailClient = () => {
@@ -237,10 +309,20 @@ const EmailComposer: React.FC<EmailComposerProps> = ({ onBack }) => {
           </button>
           <button
             onClick={handleSend}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors duration-200"
+            disabled={isSending}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
-            {isScheduled ? <Clock className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            {isScheduled ? 'Schedule' : 'Send Now'}
+            {isSending ? (
+              <>
+                <Clock className="h-4 w-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                {isScheduled ? <Clock className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                {isScheduled ? 'Schedule' : 'Send Now'}
+              </>
+            )}
           </button>
         </div>
       </div>
