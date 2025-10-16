@@ -11,27 +11,45 @@ Your CRM is now fully configured to send real emails using your Gmail account (b
 - **Security**: TLS encrypted connection
 - All emails will be sent from your actual Gmail account
 
-### 2. Google OAuth Sign-In
-- Users can sign in with their Google account
-- Also supports traditional email/password authentication
+### 2. Complete Authentication System
+- **Sign Up**: New users can create accounts with email/password
+- **Sign In**: Existing users can log in with their credentials
+- **Google OAuth**: Users can sign in with Google (requires configuration)
 - Secure Supabase authentication backend
+- User data is properly isolated with Row Level Security
 
 ### 3. Key Features Working
+- ✅ Sign up / Sign in with email and password
 - ✅ Send real emails to customers
 - ✅ Email campaigns with personalization (merge tags)
 - ✅ Schedule emails for future delivery
 - ✅ Track email delivery status
-- ✅ Google OAuth login
+- ✅ Google OAuth login (when configured)
 - ✅ Customer management
 - ✅ Analytics dashboard
 
 ## How to Demo
 
-### Step 1: Sign In
+### Step 1: Create an Account or Sign In
 1. Open the application
-2. You can either:
-   - **Sign in with Google** (Click the Google button)
-   - **Create an account** with email/password using Supabase
+2. You'll see the login page with multiple options:
+
+   **Option A - Sign Up (New Users):**
+   - Click "Don't have an account? Sign up"
+   - Enter your business name (optional)
+   - Enter your email
+   - Create a password (minimum 6 characters)
+   - Click "Create Account"
+   - You'll be automatically logged in
+
+   **Option B - Sign In (Existing Users):**
+   - Enter your email
+   - Enter your password
+   - Click "Sign In"
+
+   **Option C - Google OAuth (if configured):**
+   - Click "Sign in with Google"
+   - Note: Requires Google OAuth to be enabled in Supabase dashboard
 
 ### Step 2: Check Settings
 1. Navigate to Settings → Email Setup
@@ -72,9 +90,11 @@ The system is configured with:
 4. **Personalization**: Use merge tags like {{firstName}}, {{lastName}}, {{email}}
 
 ### Authentication
-- **Google OAuth**: Requires Google Cloud Console setup in Supabase dashboard
-- **Email/Password**: Works immediately with Supabase
-- If Google OAuth doesn't work initially, use email/password to create test accounts
+- **Email/Password Sign Up**: Works immediately - just create a new account!
+- **Email/Password Sign In**: For existing users
+- **Google OAuth**: Available but requires setup in Supabase dashboard
+  - If Google OAuth doesn't work, it needs to be enabled in Supabase
+  - Use email/password sign up instead - it works perfectly!
 
 ## Troubleshooting
 

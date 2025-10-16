@@ -12,6 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, businessName?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -72,6 +73,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signUp = async (email: string, password: string, businessName?: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          businessName: businessName || 'QuantiEdge CRM',
+          businessUrl: email.split('@')[0].replace(/[^a-z0-9]/gi, '-').toLowerCase(),
+        },
+      },
+    });
+
+    if (error) throw error;
+
+    if (data.user) {
+      setUser(mapSupabaseUser(data.user));
+    }
+  };
+
   const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -89,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, signUp, loginWithGoogle, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
