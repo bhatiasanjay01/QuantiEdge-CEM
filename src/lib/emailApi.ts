@@ -115,7 +115,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
   const token = await getAuthToken();
 
   const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/send-email`,
+    `${SUPABASE_URL}/functions/v1/send-email-smtp`,
     {
       method: 'POST',
       headers: {

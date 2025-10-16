@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Mail, Globe, Shield, Bell, User, Building, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Save, Mail, Shield, Bell, Building, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { initiateGmailOAuth, disconnectGmail, getConnectedEmailAccount, completeGmailOAuth, type EmailAccount } from '../lib/emailApi';
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('email');
-  const [emailAccount, setEmailAccount] = useState<EmailAccount | null>(null);
-  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(false);
 
   const [businessSettings, setBusinessSettings] = useState({
     businessName: user?.businessName || '',
@@ -36,62 +32,6 @@ const Settings: React.FC = () => {
     { id: 'security', name: 'Security', icon: Shield }
   ];
 
-  useEffect(() => {
-    loadEmailAccount();
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-
-    if (code) {
-      handleOAuthCallback(code);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-
-  const loadEmailAccount = async () => {
-    try {
-      const account = await getConnectedEmailAccount();
-      setEmailAccount(account);
-    } catch (error) {
-      console.error('Failed to load email account:', error);
-    } finally {
-      setIsLoadingAccount(false);
-    }
-  };
-
-  const handleOAuthCallback = async (code: string) => {
-    try {
-      const redirectUri = `${window.location.origin}/settings`;
-      const result = await completeGmailOAuth(code, redirectUri);
-      toast.success(`Gmail account ${result.email} connected successfully!`);
-      await loadEmailAccount();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to connect Gmail account');
-    }
-  };
-
-  const handleConnectGmail = async () => {
-    setIsConnecting(true);
-    try {
-      const redirectUri = `${window.location.origin}/settings`;
-      const authUrl = await initiateGmailOAuth(redirectUri);
-      window.location.href = authUrl;
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to initiate Gmail connection');
-      setIsConnecting(false);
-    }
-  };
-
-  const handleDisconnectGmail = async () => {
-    try {
-      await disconnectGmail();
-      setEmailAccount(null);
-      toast.success('Gmail account disconnected successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to disconnect Gmail account');
-    }
-  };
-
   const handleSave = (section: string) => {
     toast.success(`${section} settings saved successfully`);
   };
@@ -99,98 +39,50 @@ const Settings: React.FC = () => {
   const renderEmailSettings = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Gmail Integration</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Email Configuration</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Connect your Gmail account to send emails directly from the CRM using Gmail's API.
+          Your email sending is configured and ready to use.
         </p>
 
-        {isLoadingAccount ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin h-8 w-8 border-4 border-orange-600 border-t-transparent rounded-full"></div>
-          </div>
-        ) : emailAccount ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start">
-                <CheckCircle className="h-6 w-6 text-green-600 mr-3 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-green-900">Connected</h4>
-                  <p className="text-sm text-green-800 mt-1">
-                    Your Gmail account is connected and ready to send emails.
-                  </p>
-                  <div className="mt-3 bg-white border border-green-200 rounded-md p-3">
-                    <div className="flex items-center">
-                      <Mail className="h-5 w-5 text-green-600 mr-2" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{emailAccount.email}</div>
-                        <div className="text-xs text-gray-500">
-                          Connected on {new Date(emailAccount.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+          <div className="flex items-start">
+            <CheckCircle className="h-6 w-6 text-green-600 mr-3 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-green-900">Email Service Active</h4>
+              <p className="text-sm text-green-800 mt-1">
+                Your CRM is configured to send emails through Gmail SMTP.
+              </p>
+              <div className="mt-4 bg-white border border-green-200 rounded-md p-4">
+                <div className="flex items-center">
+                  <Mail className="h-5 w-5 text-green-600 mr-2" />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">bhatia.pradyprady28@gmail.com</div>
+                    <div className="text-xs text-gray-500">
+                      Configured with Gmail App Password
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={handleDisconnectGmail}
-                className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 transition-colors duration-200"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Disconnect Gmail
-              </button>
-            </div>
           </div>
-        ) : (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <div className="flex items-start">
-              <Mail className="h-6 w-6 text-blue-600 mr-3 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-blue-900">Connect Your Gmail Account</h4>
-                <p className="text-sm text-blue-800 mt-1">
-                  To send emails from the CRM, you need to connect your Gmail account using OAuth 2.0.
-                </p>
-                <div className="mt-4 bg-white border border-blue-200 rounded-md p-4">
-                  <h5 className="text-sm font-medium text-gray-900 mb-2">What happens when you connect:</h5>
-                  <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
-                    <li>Secure OAuth 2.0 authentication with Google</li>
-                    <li>Send emails directly through your Gmail account</li>
-                    <li>Personalized email campaigns to your customers</li>
-                    <li>Track sent emails and delivery status</li>
-                  </ul>
-                </div>
-                <div className="mt-4">
-                  <button
-                    onClick={handleConnectGmail}
-                    disabled={isConnecting}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <div className="animate-spin h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
-                        Connecting...
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="h-4 w-4 mr-2" />
-                        Connect Gmail Account
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
+
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h5 className="text-sm font-medium text-blue-900 mb-2">Email Features:</h5>
+          <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+            <li>Send personalized email campaigns to customers</li>
+            <li>Schedule emails for future delivery</li>
+            <li>Track email delivery status and analytics</li>
+            <li>Use merge tags for dynamic content</li>
+          </ul>
+        </div>
 
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h5 className="text-sm font-medium text-gray-900 mb-2">Important Notes:</h5>
+          <h5 className="text-sm font-medium text-gray-900 mb-2">Security Information:</h5>
           <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-            <li>You'll be redirected to Google to authorize access</li>
-            <li>We only request permissions to send emails on your behalf</li>
-            <li>Your credentials are securely stored and encrypted</li>
-            <li>You can disconnect your account at any time</li>
+            <li>Emails are sent using secure SMTP connection</li>
+            <li>Your credentials are stored securely in environment variables</li>
+            <li>All email communications use TLS encryption</li>
           </ul>
         </div>
       </div>
