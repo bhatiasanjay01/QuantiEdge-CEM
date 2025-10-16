@@ -8,6 +8,7 @@ import { useCustomers } from '../contexts/CustomerContext';
 import AddRecipientModal from '../components/AddRecipientModal';
 import Papa from 'papaparse';
 import toast from 'react-hot-toast';
+import { sendEmail } from '../lib/emailApi';
 
 interface EmailCampaign {
   id: string;
@@ -435,100 +436,33 @@ const EmailComposer: React.FC<{ onBack: () => void; onCampaignCreated: () => voi
 
     setLoading(true);
     try {
-      const recipientEmails = selectedCustomers
-        .map(id => customers.find(c => c.id === id)?.email)
-        .filter(Boolean) as string[];
+      const recipients = selectedCustomers.map(customer => ({
+        email: customer.email,
+        name: `${customer.name}`,
+      }));
 
-      const campaignStatus = isScheduled ? 'scheduled' : 'sending';
+      const result = await sendEmail({
+        campaignName: campaignName,
+        subject: subject,
+        content: content,
+        recipients: recipients,
+        scheduledAt: isScheduled ? scheduledDateTime : undefined,
+      });
 
-      const { data: campaignData, error: campaignError } = await supabase
-        .from('email_campaigns')
-        .insert({
-          name: campaignName,
-          type: 'one-off',
-          status: campaignStatus,
-          subject,
-          content,
-          recipients_count: selectedCustomers.length,
-          scheduled_at: isScheduled ? scheduledDateTime : null,
-        })
-        .select()
-        .single();
-
-      if (campaignError) throw campaignError;
-
-      if (!isScheduled) {
-        try {
-          const response = await fetch('http://localhost:5000/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: recipientEmails,
-              subject,
-              body: content,
-            }),
-          });
-
-          const result = await response.json();
-
-          if (response.ok) {
-            await supabase
-              .from('email_campaigns')
-              .update({
-                status: 'sent',
-                sent_at: new Date().toISOString(),
-                sent_count: result.success_count || recipientEmails.length
-              })
-              .eq('id', campaignData.id);
-
-            toast.success(`Email sent successfully to ${result.success_count || recipientEmails.length} recipient(s)!`);
-          } else {
-            await supabase
-              .from('email_campaigns')
-              .update({ status: 'failed' })
-              .eq('id', campaignData.id);
-
-            toast.error(result.error || 'Failed to send emails. Check if server is running.');
-          }
-        } catch (emailError) {
-          console.error('Email sending error:', emailError);
-          await supabase
-            .from('email_campaigns')
-            .update({ status: 'failed' })
-            .eq('id', campaignData.id);
-          toast.error('Failed to connect to email server. Make sure Python server is running on port 5000.');
+      if (result.success) {
+        if (isScheduled) {
+          toast.success(`Campaign scheduled for ${new Date(scheduledDateTime!).toLocaleString()}!`);
+        } else {
+          toast.success(result.message || `Email sent to ${result.successCount} recipient(s)!`);
         }
+        onCampaignCreated();
+        onBack();
       } else {
-        try {
-          const response = await fetch('http://localhost:5000/api/schedule-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: recipientEmails,
-              subject,
-              body: content,
-              send_at: scheduledDateTime,
-            }),
-          });
-
-          const result = await response.json();
-
-          if (response.ok) {
-            toast.success('Campaign scheduled successfully!');
-          } else {
-            toast.error(result.error || 'Failed to schedule email');
-          }
-        } catch (scheduleError) {
-          console.error('Scheduling error:', scheduleError);
-          toast.error('Failed to connect to email server for scheduling.');
-        }
+        toast.error('Failed to send email campaign');
       }
-
-      onCampaignCreated();
-      onBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating campaign:', error);
-      toast.error('Failed to create campaign');
+      toast.error(error.message || 'Failed to create campaign. Please make sure you are signed in.');
     } finally {
       setLoading(false);
     }
