@@ -35,29 +35,28 @@ const Login: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F5F1E8] py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-sm px-8 py-10">
-          {/* Logo and Title */}
-          <div className="mb-8">
-            <div className="flex justify-center mb-6">
-              <div className="flex items-center">
-                <ChefHat className="h-10 w-10 text-orange-600" />
-                <span className="ml-2 text-2xl font-bold text-gray-900">QuantiEdge</span>
-              </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <div className="flex justify-center">
+            <div className="flex items-center">
+              <ChefHat className="h-12 w-12 text-orange-600" />
+              <span className="ml-2 text-3xl font-bold text-gray-900">QuantiEdge</span>
             </div>
-            <h2 className="text-center text-2xl font-semibold text-gray-900 mb-2">
-              {isSignUp ? 'Create your account' : 'Sign in to your account'}
-            </h2>
-            <p className="text-center text-sm text-gray-500">
-              {isSignUp ? 'Get started with QuantiEdge CRM' : 'Welcome back to QuantiEdge'}
-            </p>
           </div>
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            {isSignUp ? 'Create your account' : 'Sign in to your account'}
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Manage your CRM and email campaigns with ease
+          </p>
+        </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm space-y-4">
             {isSignUp && (
               <div>
-                <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-1">
                   Business Name
                 </label>
                 <input
@@ -66,66 +65,79 @@ const Login: React.FC = () => {
                   type="text"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  className="appearance-none block w-full px-4 py-3 border border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent sm:text-sm transition-all duration-200"
+                  className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm transition-colors duration-200"
                   placeholder="Your business name (optional)"
                 />
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email address
               </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none block w-full px-4 py-3 border border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent sm:text-sm transition-all duration-200"
-                placeholder="Enter your email"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm transition-colors duration-200"
+                  placeholder="Enter your email"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none block w-full px-4 py-3 border border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent sm:text-sm transition-all duration-200"
-                placeholder={isSignUp ? 'Create a password (min 6 characters)' : '••••••••••••'}
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm transition-colors duration-200"
+                  placeholder={isSignUp ? 'Create a password (min 6 characters)' : 'Enter your password'}
+                />
+              </div>
             </div>
+          </div>
 
+          <div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex justify-center py-3.5 px-4 border border-transparent text-base font-medium rounded-xl text-white bg-[#C2410C] hover:bg-[#B03A0B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
             >
               {isLoading ? (isSignUp ? 'Creating account...' : 'Signing in...') : (isSignUp ? 'Create Account' : 'Sign In')}
             </button>
+          </div>
 
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm text-[#C2410C] hover:text-[#B03A0B] font-medium transition-colors duration-200"
-              >
-                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-              </button>
-            </div>
-          </form>
-        </div>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-sm text-orange-600 hover:text-orange-500 font-medium"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            </button>
+          </div>
+
+        </form>
       </div>
     </div>
   );
