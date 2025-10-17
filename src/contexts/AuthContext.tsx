@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import * as authApi from '../lib/auth';
 
 interface User {
-  id: string;
+  id: number;
   email: string;
   businessName: string;
   businessUrl: string;
@@ -13,7 +12,6 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, businessName?: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -33,83 +31,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
-      }
+    const checkAuth = async () => {
+      const currentUser = await authApi.getCurrentUser();
+      setUser(currentUser);
       setIsLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(mapSupabaseUser(session.user));
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    };
+    checkAuth();
   }, []);
 
-  const mapSupabaseUser = (supaUser: SupabaseUser): User => {
-    return {
-      id: supaUser.id,
-      email: supaUser.email || '',
-      businessName: supaUser.user_metadata?.businessName || 'QuantiEdge CRM',
-      businessUrl: supaUser.user_metadata?.businessUrl || 'quantiedge'
-    };
-  };
-
   const login = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) throw error;
-
-    if (data.user) {
-      setUser(mapSupabaseUser(data.user));
-    }
+    const { user: loggedInUser } = await authApi.login(email, password);
+    setUser(loggedInUser);
   };
 
   const signUp = async (email: string, password: string, businessName?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          businessName: businessName || 'QuantiEdge CRM',
-          businessUrl: email.split('@')[0].replace(/[^a-z0-9]/gi, '-').toLowerCase(),
-        },
-      },
-    });
-
-    if (error) throw error;
-
-    if (data.user) {
-      setUser(mapSupabaseUser(data.user));
-    }
-  };
-
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`,
-      },
-    });
-
-    if (error) throw error;
+    const { user: newUser } = await authApi.signup(email, password, businessName || 'QuantiEdge CRM');
+    setUser(newUser);
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    await authApi.logout();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signUp, loginWithGoogle, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, signUp, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
