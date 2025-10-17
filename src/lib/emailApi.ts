@@ -1,7 +1,4 @@
-import { supabase } from './supabase';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const PYTHON_SERVER_URL = 'http://localhost:5000';
 
 export interface EmailRecipient {
   email: string;
@@ -17,119 +14,70 @@ export interface SendEmailParams {
 }
 
 export interface EmailAccount {
-  id: string;
-  email: string;
-  provider: string;
-  is_active: boolean;
-  created_at: string;
+  is_connected: boolean;
+  email: string | null;
 }
 
-async function getAuthToken(): Promise<string> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    throw new Error('Not authenticated');
-  }
-  return session.access_token;
+export async function initiateGmailOAuth(): Promise<void> {
+  window.location.href = `${PYTHON_SERVER_URL}/api/auth/google`;
 }
 
-export async function initiateGmailOAuth(redirectUri: string): Promise<string> {
-  const token = await getAuthToken();
-
-  const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/gmail-oauth/initiate?redirect_uri=${encodeURIComponent(redirectUri)}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+export async function getConnectedEmailAccount(): Promise<EmailAccount> {
+  const response = await fetch(`${PYTHON_SERVER_URL}/api/auth/status`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to initiate OAuth');
-  }
-
-  const data = await response.json();
-  return data.authUrl;
-}
-
-export async function completeGmailOAuth(code: string, redirectUri: string): Promise<{ success: boolean; email: string }> {
-  const token = await getAuthToken();
-
-  const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/gmail-oauth/callback`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to complete OAuth');
+    throw new Error('Failed to get auth status');
   }
 
   return await response.json();
 }
 
-export async function disconnectGmail(): Promise<void> {
-  const token = await getAuthToken();
+export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; successCount?: number; failedCount?: number; message: string }> {
+  const recipientEmails = params.recipients.map(r => r.email);
 
-  const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/gmail-oauth/disconnect`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  );
+  const url = params.scheduledAt
+    ? `${PYTHON_SERVER_URL}/api/schedule-email`
+    : `${PYTHON_SERVER_URL}/api/send-email`;
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to disconnect Gmail');
+  const body = params.scheduledAt
+    ? {
+        to: recipientEmails,
+        subject: params.subject,
+        body: params.content,
+        send_at: params.scheduledAt,
+      }
+    : {
+        to: recipientEmails,
+        subject: params.subject,
+        body: params.content,
+      };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 401) {
+    throw new Error('Gmail account not connected. Please connect in Settings.');
   }
-}
-
-export async function getConnectedEmailAccount(): Promise<EmailAccount | null> {
-  const { data, error } = await supabase
-    .from('email_accounts')
-    .select('id, email, provider, is_active, created_at')
-    .eq('is_active', true)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
-}
-
-export async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; campaignId: string; successCount?: number; failedCount?: number; message: string }> {
-  const token = await getAuthToken();
-
-  const response = await fetch(
-    `${SUPABASE_URL}/functions/v1/send-email-smtp`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(params),
-    }
-  );
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to send email');
   }
 
-  return await response.json();
+  const result = await response.json();
+
+  return {
+    success: true,
+    successCount: result.success_count,
+    failedCount: result.failed_count,
+    message: result.message || 'Email sent successfully',
+  };
 }

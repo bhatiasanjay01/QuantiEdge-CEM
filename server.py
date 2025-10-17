@@ -61,8 +61,38 @@ USER_TOKENS = load_tokens() # Global dictionary to hold tokens (User ID -> Token
 
 scheduler = BackgroundScheduler()
 scheduler.start()
-emails = [] # Emails list setup remains the same
-# ... (load_emails and save_emails functions remain the same) ...
+
+# --- Load saved emails ---
+def load_emails():
+    """Loads email data from a JSON file."""
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                print("WARNING: Could not decode emails.json. Starting with empty list.")
+                return []
+    return []
+
+# --- Save emails ---
+def save_emails(data):
+    """Saves email data to a JSON file."""
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+emails = load_emails()
+
+def update_email_status(email_entry, new_status):
+    """Helper to update the status of an email entry in the global list."""
+    recipient_tuple = tuple(email_entry['to']) if isinstance(email_entry['to'], list) else email_entry['to']
+
+    for email in emails:
+        current_recipient = tuple(email['to']) if isinstance(email['to'], list) else email['to']
+
+        if current_recipient == recipient_tuple and email["send_at"] == email_entry["send_at"]:
+            email["status"] = new_status
+            return True
+    return False
 
 # -------------------------------------------------------------
 # --- OAuth & Credential Handling ---
