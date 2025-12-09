@@ -78,24 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-          });
-
-          if (signUpError) throw signUpError;
-
-          if (signUpData.user) {
-            setUser({
-              id: signUpData.user.id,
-              email: signUpData.user.email || '',
-              businessName: 'Culinary Delights Academy',
-              businessUrl: 'culinary-delights'
-            });
-            return;
-          }
-        }
         throw error;
       }
 

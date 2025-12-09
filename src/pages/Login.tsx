@@ -103,7 +103,7 @@ const Login: React.FC = () => {
 
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              New user? Just enter your email and password to create an account
+              Enter your email and password (minimum 6 characters)
             </p>
           </div>
         </form>
