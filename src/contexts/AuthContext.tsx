@@ -68,6 +68,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
